@@ -213,8 +213,8 @@ class Trainer():
     def save_model(self, save_path):
         save_file = 'Segmenter_epochs:{}_optimizer:{}_lr:{}_model{}.pth'.format(self.cfg['dataset']['epochs'],
                                                                           self.cfg['solver']['optimizer'],
-                                                                          self.cfg['solver']['lr'],
-                                                                          self.cfg['args']['network_name'])
+                                                                          self.cfg['dataset']['lr'],
+                                                                          self.cfg['model']['backbone']['name'])
         path = os.path.join(save_path, save_file)
         torch.save({'model': deepcopy(self.model), 'optimizer': self.optimizer.state_dict()}, path)
         print("Success save")
