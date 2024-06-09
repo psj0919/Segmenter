@@ -90,6 +90,7 @@ class Trainer():
         return loader
 
 
+
     def setup_network(self):
         model = create_segmenter(self.cfg)
 

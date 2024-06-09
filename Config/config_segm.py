@@ -32,7 +32,7 @@ def get_config_dict():
         test_ann_path = test_ann_path,
         json_file = json_file,
         num_class = num_class,
-        epochs = 64,
+        epochs = 200,
         eval_freq =2,
         batch_size = 8,
         lr = 0.001,
