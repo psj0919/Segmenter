@@ -262,7 +262,6 @@ class Trainer():
         for i in range(len(json_path)):
             polygon = json_path[i]['polygon']
             cls = json_path[i]['class']
-            org_cls.append(cls)
             for j in range(len(polygon)):
                 if j % 2 == 0:
                     polygon[j] = polygon[j] * scale_x
@@ -273,18 +272,23 @@ class Trainer():
             if polygon.size == 0:
                 pass
             else:
+
                 x_min = np.min(polygon[:, 0])
                 y_min = np.min(polygon[:, 1])
                 x_max = np.max(polygon[:, 0])
                 y_max = np.max(polygon[:, 1])
-                #
-                crop_target_image = target_image[:, y_min:y_max:, x_min:x_max]
-                crop_pred_image = pred_image[:, y_min:y_max:, x_min:x_max]
-                #
-                crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-                crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-                iou = self.iou(crop_pred_image, crop_target_image, cls)
-                ious.append(iou)
+                if (x_min == x_max) or (y_min==y_max):
+                    pass
+                else:
+                    #
+                    crop_target_image = target_image[:, y_min:y_max:, x_min:x_max]
+                    crop_pred_image = pred_image[:, y_min:y_max:, x_min:x_max]
+                    #
+                    crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
+                    crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
+                    org_cls.append(cls)
+                    iou = self.iou(crop_pred_image, crop_target_image, cls)
+                    ious.append(iou)
 
         return ious, org_cls
 
@@ -316,11 +320,14 @@ class Trainer():
                 y_min = np.min(polygon[:, 1])
                 x_max = np.max(polygon[:, 0])
                 y_max = np.max(polygon[:, 1])
-                #
-                crop_target_image = target[:, y_min:y_max:, x_min:x_max]
-                crop_pred_image = pred[:, y_min:y_max:, x_min:x_max]
-                target_image_list.append(crop_target_image)
-                pred_image_list.append(crop_pred_image)
+                if (x_min == x_max) or (y_min == y_max):
+                    pass
+                else:
+                    #
+                    crop_target_image = target[:, y_min:y_max:, x_min:x_max]
+                    crop_pred_image = pred[:, y_min:y_max:, x_min:x_max]
+                    target_image_list.append(crop_target_image)
+                    pred_image_list.append(crop_pred_image)
 
         return target_image_list, pred_image_list
 
