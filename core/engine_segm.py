@@ -127,10 +127,17 @@ class Trainer():
 
         for curr_epoch in range(self.cfg['dataset']['epochs']):
             if (curr_epoch + 1) % 3 == 0:
-                avr_ious, pixel_accs, cls = self.validation()
+                avr_ious, pixel_accs, cls, org_cls, target_crop_image, pred_crop_image = self.validation()
+                # Iou
                 for i in range(len(avr_ious)):
                     self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step=self.global_step)
-
+                # Crop Image
+                for i in range(len(target_crop_image)):
+                    self.writer.add_image('target /' + org_cls[i], self.trg_to_rgb(target_crop_image[i]),
+                                          dataformats='HWC', global_step=1)
+                    self.writer.add_image('pred /' + org_cls[i], self.pred_to_rgb(pred_crop_image[i]),
+                                          dataformats='HWC', global_step=1)
+                # Pixel Acc
                 self.writer.add_scalar(tag='pixel_accs', scalar_value=pixel_accs.mean(), global_step=self.global_step)
             #
             for batch_idx, (data, target, label, index) in (enumerate(self.train_loader)):
@@ -183,8 +190,10 @@ class Trainer():
             pred = logits.softmax(dim=1).argmax(dim=1).to('cpu')
             target_ = target.softmax(dim=1).argmax(dim=1).to('cpu')
             file, json_path = self.load_json_file(int(idx))
-            #
-            iou = self.make_bbox(file, json_path, target_, pred)
+            # Iou
+            iou, org_cls = self.make_bbox(file, json_path, target_, pred)
+            # Crop image
+            target_crop_image, pred_crop_image = self.crop_image(target[0], logits[0], json_path)
 
             for i in range(len(iou)):
                 for key, val in iou[i].items():
@@ -207,7 +216,7 @@ class Trainer():
 
         self.model.train()
 
-        return avr_ious, pixel_accs, cls
+        return avr_ious, pixel_accs, cls, org_cls, target_crop_image, pred_crop_image
 
 
 
@@ -242,6 +251,7 @@ class Trainer():
 
     def make_bbox(self, file, json_path, target_image, pred_image):
         ious = []
+        org_cls = []
         #
         org_res = (1920, 1080)
         target_res = (224, 224)
@@ -252,6 +262,7 @@ class Trainer():
         for i in range(len(json_path)):
             polygon = json_path[i]['polygon']
             cls = json_path[i]['class']
+            org_cls.append(cls)
             for j in range(len(polygon)):
                 if j % 2 == 0:
                     polygon[j] = polygon[j] * scale_x
@@ -259,22 +270,23 @@ class Trainer():
                     polygon[j] = polygon[j] * scale_y
 
             polygon = np.array(polygon, np.int32).reshape(-1, 2)
+            if polygon.size == 0:
+                pass
+            else:
+                x_min = np.min(polygon[:, 0])
+                y_min = np.min(polygon[:, 1])
+                x_max = np.max(polygon[:, 0])
+                y_max = np.max(polygon[:, 1])
+                #
+                crop_target_image = target_image[:, y_min:y_max:, x_min:x_max]
+                crop_pred_image = pred_image[:, y_min:y_max:, x_min:x_max]
+                #
+                crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
+                crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
+                iou = self.iou(crop_pred_image, crop_target_image, cls)
+                ious.append(iou)
 
-            x_min = np.min(polygon[:, 0])
-            y_min = np.min(polygon[:, 1])
-            x_max = np.max(polygon[:, 0])
-            y_max = np.max(polygon[:, 1])
-
-            #
-            crop_target_image = target_image[:, y_min:y_max:, x_min:x_max]
-            crop_pred_image = pred_image[:, y_min:y_max:, x_min:x_max]
-            #
-            crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-            crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-            iou = self.iou(crop_pred_image, crop_target_image, cls)
-            ious.append(iou)
-
-        return ious
+        return ious, org_cls
 
     def iou(self, pred, target, cls, thr=0.5, dim=(2, 3), epsilon=0.001):
         ious = {}
@@ -287,6 +299,31 @@ class Trainer():
         iou = ((inter + epsilon) / (union + epsilon)).mean()
         ious[cls] = iou
         return ious
+
+    def crop_image(self, target, pred, json_path):
+        target_image_list = []
+        pred_image_list = []
+        count = 0
+        #
+        for i in range(len(json_path)):
+            polygon = json_path[i]['polygon']
+            cls = json_path[i]['class']
+            polygon = np.array(polygon, np.int32).reshape(-1, 2)
+            if polygon.size == 0:
+                pass
+            else:
+                x_min = np.min(polygon[:, 0])
+                y_min = np.min(polygon[:, 1])
+                x_max = np.max(polygon[:, 0])
+                y_max = np.max(polygon[:, 1])
+                #
+                crop_target_image = target[:, y_min:y_max:, x_min:x_max]
+                crop_pred_image = pred[:, y_min:y_max:, x_min:x_max]
+                target_image_list.append(crop_target_image)
+                pred_image_list.append(crop_pred_image)
+
+        return target_image_list, pred_image_list
+
 
     def pred_to_rgb(self, pred):
         assert len(pred.shape) == 3

@@ -68,7 +68,7 @@ def get_config_dict():
             distilled= False,
         ),
         resume = ' ',
-        save_dir = './runs/train/segm',
+        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train',
         checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm'
     )
 
