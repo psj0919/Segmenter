@@ -133,9 +133,9 @@ class Trainer():
                     self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step=self.global_step)
                 # Crop Image
                 for i in range(len(target_crop_image)):
-                    self.writer.add_image('target /' + org_cls[i], self.trg_to_rgb(target_crop_image[i]),
+                    self.writer.add_image('target /' + org_cls[i], self.trg_to_class_rgb(target_crop_image[i]),
                                           dataformats='HWC', global_step=1)
-                    self.writer.add_image('pred /' + org_cls[i], self.pred_to_rgb(pred_crop_image[i]),
+                    self.writer.add_image('pred /' + org_cls[i], self.pred_to_class_rgb(pred_crop_image[i]),
                                           dataformats='HWC', global_step=1)
                 # Pixel Acc
                 self.writer.add_scalar(tag='pixel_accs', scalar_value=pixel_accs.mean(), global_step=self.global_step)
@@ -316,10 +316,22 @@ class Trainer():
             if polygon.size == 0:
                 pass
             else:
-                x_min = np.min(polygon[:, 0])
-                y_min = np.min(polygon[:, 1])
-                x_max = np.max(polygon[:, 0])
-                y_max = np.max(polygon[:, 1])
+                x_min = np.min(polygon[:, 0]) - 20
+                if x_min < 0:
+                    x_min = 0
+                #
+                y_min = np.min(polygon[:, 1]) - 20
+                if y_min < 0:
+                    y_min = 0
+                #
+                x_max = np.max(polygon[:, 0]) + 20
+                if x_max > 512:
+                    x_max = 512
+                #
+                y_max = np.max(polygon[:, 1]) + 20
+                if y_max > 512:
+                    y_max = 512
+                #
                 if (x_min == x_max) or (y_min == y_max):
                     pass
                 else:
@@ -375,6 +387,63 @@ class Trainer():
             target_rgb[target == i] = np.array(color_table[i])
 
         return target_rgb
+    def trg_to_class_rgb(self, target, cls):
+        assert len(target.shape) == 3
+
+        CLASSES = (
+            'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
+            'freespace', 'curb', 'safetyZone', 'roadMark', 'whiteLane',
+            'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
+            'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
+        )
+        color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
+                       5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
+                       9: (64, 64, 64), 10: (0, 0, 192), 11: (192, 0, 192), 12: (0, 192, 192),
+                       13: (192, 192, 192), 14: (64, 128, 0), 15: (192, 0, 128), 16: (64, 128, 128),
+                       17: (192, 128, 128), 18: (128, 64, 0), 19: (128, 192, 0), 20: (0, 64, 128)}
+
+        #
+        target = target.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
+        #
+        target = target.detach().cpu().numpy()
+        #
+        target_rgb = np.zeros_like(target, dtype=np.uint8)
+        target_rgb = np.repeat(np.expand_dims(target_rgb[:, :], axis=-1), 3, -1)
+
+        i = CLASSES.index(cls)
+        target_rgb[target == i] = np.array(color_table[i])
+
+        return target_rgb
+
+    def pred_to_class_rgb(self, pred, cls):
+        assert len(pred.shape) == 3
+        #
+        CLASSES = (
+            'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
+            'freespace', 'curb', 'safetyZone', 'roadMark', 'whiteLane',
+            'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
+            'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
+        )
+        #
+        color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
+                       5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
+                       9: (64, 64, 64), 10: (0, 0, 192), 11: (192, 0, 192), 12: (0, 192, 192),
+                       13: (192, 192, 192), 14: (64, 128, 0), 15: (192, 0, 128), 16: (64, 128, 128),
+                       17: (192, 128, 128), 18: (128, 64, 0), 19: (128, 192, 0), 20: (0, 64, 128)}
+
+        #
+        #
+        pred = pred.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
+        #
+        pred = pred.detach().cpu().numpy()
+        #
+        pred_rgb = np.zeros_like(pred, dtype=np.uint8)
+        pred_rgb = np.repeat(np.expand_dims(pred_rgb[:, :], axis=-1), 3, -1)
+        #
+        i = CLASSES.index(cls)
+        pred_rgb[pred == i] = np.array(color_table[i])
+
+        return pred_rgb
 
     @staticmethod
     def matplotlib_imshow(img):
