@@ -133,7 +133,7 @@ class Trainer():
                     self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step=self.global_step)
                 # Crop Image
                 for i in range(len(target_crop_image)):
-                    self.writer.add_image('target /' + org_cls[i], self.trg_to_class_rgb(target_crop_image[i]),
+                    self.writer.add_image('target /' + org_cls[i], self.trg_to_class_rgb(target_crop_image[i], org_cls[i]),
                                           dataformats='HWC', global_step=1)
                     self.writer.add_image('pred /' + org_cls[i], self.pred_to_class_rgb(pred_crop_image[i]),
                                           dataformats='HWC', global_step=1)
