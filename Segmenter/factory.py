@@ -46,7 +46,7 @@ def create_vit(model_cfg):
     normalization = model_cfg['model']['backbone']["normalization"]
     model_cfg["n_cls"] = 1000
     mlp_expansion_ratio = 4
-    model_cfg["d_ff"] = mlp_expansion_ratio * model_cfg['model']['backbone']["d_model"]
+    model_cfg['model']['backbone']['d_ff'] = mlp_expansion_ratio * model_cfg['model']['backbone']["d_model"]
 
 
     model = VisionTransformer(
