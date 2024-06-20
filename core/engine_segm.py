@@ -135,7 +135,7 @@ class Trainer():
                 for i in range(len(target_crop_image)):
                     self.writer.add_image('target /' + org_cls[i], self.trg_to_class_rgb(target_crop_image[i], org_cls[i]),
                                           dataformats='HWC', global_step=1)
-                    self.writer.add_image('pred /' + org_cls[i], self.pred_to_class_rgb(pred_crop_image[i]),
+                    self.writer.add_image('pred /' + org_cls[i], self.pred_to_class_rgb(pred_crop_image[i], org_cls[i]),
                                           dataformats='HWC', global_step=1)
                 # Pixel Acc
                 self.writer.add_scalar(tag='pixel_accs', scalar_value=pixel_accs.mean(), global_step=self.global_step)
