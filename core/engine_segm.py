@@ -191,9 +191,9 @@ class Trainer():
             target_ = target.softmax(dim=1).argmax(dim=1).to('cpu')
             file, json_path = self.load_json_file(int(idx))
             # Iou
-            iou, org_cls = self.make_bbox(file, json_path, target_, pred)
+            iou = self.make_bbox(file, json_path, target_, pred)
             # Crop image
-            target_crop_image, pred_crop_image = self.crop_image(target[0], logits[0], json_path)
+            target_crop_image, pred_crop_image, org_cls = self.crop_image(target[0], logits[0], json_path)
 
             for i in range(len(iou)):
                 for key, val in iou[i].items():
@@ -229,15 +229,19 @@ class Trainer():
         torch.save({'model': deepcopy(self.model), 'optimizer': self.optimizer.state_dict()}, path)
         print("Success save")
 
-
     def load_json_file(self, idx):
-        json_path = self.cfg['dataset']['json_file']
+        json_path = '/storage/sjpark/vehicle_data/Dataset/val_json/'
         idx_json = sorted(os.listdir(json_path))
-        expected_cls = ['background', 'motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
+        expected_cls = ['background', 'motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk',
+                        'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
+        for i in range(len(expected_cls)):
+            expected_cls[i] = expected_cls[i].lower()
+
         json_file = os.path.join(json_path, idx_json[idx])
         with open(json_file, 'r') as f:
             json_data1 = json.load(f)
         json_data = json_data1['annotations']
+        # json_cls_data = json_data1['class']
         ann_json = []
         #
         for i in range(len(json_data)):
@@ -245,7 +249,6 @@ class Trainer():
                 pass
             else:
                 ann_json.append(json_data[i])
-
 
         return idx_json[idx], ann_json
 
@@ -290,7 +293,7 @@ class Trainer():
                     iou = self.iou(crop_pred_image, crop_target_image, cls)
                     ious.append(iou)
 
-        return ious, org_cls
+        return ious
 
     def iou(self, pred, target, cls, thr=0.5, dim=(2, 3), epsilon=0.001):
         ious = {}
@@ -307,6 +310,7 @@ class Trainer():
     def crop_image(self, target, pred, json_path):
         target_image_list = []
         pred_image_list = []
+        cls_list = []
         count = 0
         #
         for i in range(len(json_path)):
@@ -335,14 +339,15 @@ class Trainer():
                 if (x_min == x_max) or (y_min == y_max):
                     pass
                 else:
-                    #
                     crop_target_image = target[:, y_min:y_max:, x_min:x_max]
                     crop_pred_image = pred[:, y_min:y_max:, x_min:x_max]
                     target_image_list.append(crop_target_image)
                     pred_image_list.append(crop_pred_image)
+                    cls_list.append(cls)
+        if len(cls_list) != len(target_image_list):
+            print("error")
 
-        return target_image_list, pred_image_list
-
+        return target_image_list, pred_image_list, cls_list
 
     def pred_to_rgb(self, pred):
         assert len(pred.shape) == 3
@@ -387,15 +392,20 @@ class Trainer():
             target_rgb[target == i] = np.array(color_table[i])
 
         return target_rgb
+
     def trg_to_class_rgb(self, target, cls):
         assert len(target.shape) == 3
 
-        CLASSES = (
+        CLASSES = [
             'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
             'freespace', 'curb', 'safetyZone', 'roadMark', 'whiteLane',
             'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
             'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
-        )
+        ]
+
+        for i in range(len(CLASSES)):
+            CLASSES[i] = CLASSES[i].lower()
+
         color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
                        5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
                        9: (64, 64, 64), 10: (0, 0, 192), 11: (192, 0, 192), 12: (0, 192, 192),
@@ -418,12 +428,14 @@ class Trainer():
     def pred_to_class_rgb(self, pred, cls):
         assert len(pred.shape) == 3
         #
-        CLASSES = (
+        CLASSES = [
             'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
             'freespace', 'curb', 'safetyZone', 'roadMark', 'whiteLane',
             'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
             'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
-        )
+        ]
+        for i in range(len(CLASSES)):
+            CLASSES[i] = CLASSES[i].lower()
         #
         color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
                        5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
