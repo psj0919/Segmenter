@@ -126,11 +126,11 @@ class Trainer():
         self.model.train()
 
         for curr_epoch in range(self.cfg['dataset']['epochs']):
-            if (curr_epoch + 1) % 3 == 0:
+            if (curr_epoch + 1) % 1 == 0:
                 avr_ious, pixel_accs, cls, org_cls, target_crop_image, pred_crop_image = self.validation()
                 # Iou
                 for i in range(len(avr_ious)):
-                    self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step=self.global_step)
+                    self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step = self.global_step)
                 # Crop Image
                 for i in range(len(target_crop_image)):
                     self.writer.add_image('target /' + org_cls[i], self.trg_to_class_rgb(target_crop_image[i], org_cls[i]),
@@ -155,7 +155,7 @@ class Trainer():
                 loss.backward()
                 self.optimizer.step()
 
-                if self.global_step % self.cfg['solver']['print_freq'] ==0:
+                if self.global_step % self.cfg['solver']['print_freq'] == 0:
                     self.writer.add_scalar(tag='train/loss', scalar_value=loss, global_step=self.global_step)
                 if self.global_step % (10 * self.cfg['solver']['print_freq']) ==0:
                     self.writer.add_image('train/train_image', self.matplotlib_imshow(data[0].to('cpu')),
@@ -402,7 +402,6 @@ class Trainer():
             'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
             'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
         ]
-
         for i in range(len(CLASSES)):
             CLASSES[i] = CLASSES[i].lower()
 
@@ -420,7 +419,7 @@ class Trainer():
         target_rgb = np.zeros_like(target, dtype=np.uint8)
         target_rgb = np.repeat(np.expand_dims(target_rgb[:, :], axis=-1), 3, -1)
 
-        i = CLASSES.index(cls)
+        i = CLASSES.index(cls.lower())
         target_rgb[target == i] = np.array(color_table[i])
 
         return target_rgb
@@ -452,7 +451,7 @@ class Trainer():
         pred_rgb = np.zeros_like(pred, dtype=np.uint8)
         pred_rgb = np.repeat(np.expand_dims(pred_rgb[:, :], axis=-1), 3, -1)
         #
-        i = CLASSES.index(cls)
+        i = CLASSES.index(cls.lower())
         pred_rgb[pred == i] = np.array(color_table[i])
 
         return pred_rgb
