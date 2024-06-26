@@ -8,6 +8,7 @@ import numpy as np
 from copy import deepcopy
 from dataset.dataset import vehicledata
 from Segmenter.factory import create_segmenter
+from optim.factory import create_optimizer, create_scheduler
 from timm import scheduler
 from timm import optim
 from optim.scheduler import PolynomiaLR
@@ -100,19 +101,8 @@ class Trainer():
         return optim.create_optimizer(opt_args, model)
 
     def setup_scheduler(self, opt_args, optimizer):
-        if opt_args.sched == "polynomial":
-            lr_scheduler = PolynomiaLR(
-                self.optimizer,
-                opt_args.poly_step_size,
-                opt_args.iter_warmup,
-                opt_args.iter_max,
-                opt_args.poly_power,
-                opt_args.min_lr,
-            )
-        else:
-            lr_scheduler, _ = scheduler.create_scheduler(opt_args, self.optimizer)
+        return create_scheduler(opt_args, optimizer)
 
-        return lr_scheduler
     def setup_loss(self):
         if self.cfg['solver']['loss'] == 'crossentropy':
             loss = torch.nn.CrossEntropyLoss()
@@ -124,6 +114,7 @@ class Trainer():
     def training(self):
         print("-----strat training-----")
         self.model.train()
+        num_updates = self.cfg['dataset']['epochs'] * len(self.train_loader)
 
         for curr_epoch in range(self.cfg['dataset']['epochs']):
             if (curr_epoch + 1) % 1 == 0:
@@ -147,14 +138,17 @@ class Trainer():
                 target = target.to(self.device)
 
                 out = self.model.forward(data)
-
-
+                #
                 loss = 10 * self.loss(out, target)
-
+                #
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+                #
+                num_updates += 1
+                self.scheduler.step_update(num_updates=num_updates)
 
+                #
                 if self.global_step % self.cfg['solver']['print_freq'] == 0:
                     self.writer.add_scalar(tag='train/loss', scalar_value=loss, global_step=self.global_step)
                 if self.global_step % (10 * self.cfg['solver']['print_freq']) ==0:
@@ -168,7 +162,7 @@ class Trainer():
                                           dataformats='HWC', global_step=self.global_step)
             print("Complete {}_epoch".format(curr_epoch))
 
-            self.scheduler.step()
+
             self.writer.add_scalar(tag='train/lr', scalar_value=self.optimizer.param_groups[0]['lr'],
                                    global_step=curr_epoch)
 
