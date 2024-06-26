@@ -105,7 +105,7 @@ class Trainer():
 
     def setup_loss(self):
         if self.cfg['solver']['loss'] == 'crossentropy':
-            loss = torch.nn.CrossEntropyLoss()
+            loss = torch.nn.BCEWithLogitsLoss()
         else:
             raise("Please check loss name...")
         return loss
@@ -117,7 +117,7 @@ class Trainer():
         num_updates = self.cfg['dataset']['epochs'] * len(self.train_loader)
 
         for curr_epoch in range(self.cfg['dataset']['epochs']):
-            if (curr_epoch + 1) % 1 == 0:
+            if (curr_epoch + 1) % 3 == 0:
                 avr_ious, pixel_accs, cls, org_cls, target_crop_image, pred_crop_image = self.validation()
                 # Iou
                 for i in range(len(avr_ious)):
@@ -136,7 +136,7 @@ class Trainer():
                 self.global_step += 1
                 data = data.to(self.device)
                 target = target.to(self.device)
-
+                target_ = target.long()
                 out = self.model.forward(data)
                 #
                 loss = 10 * self.loss(out, target)
@@ -147,7 +147,6 @@ class Trainer():
                 #
                 num_updates += 1
                 self.scheduler.step_update(num_updates=num_updates)
-
                 #
                 if self.global_step % self.cfg['solver']['print_freq'] == 0:
                     self.writer.add_scalar(tag='train/loss', scalar_value=loss, global_step=self.global_step)

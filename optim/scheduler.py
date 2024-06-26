@@ -1,9 +1,9 @@
 from torch import optim
-from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.lr_scheduler import _LRScheduler
 from timm.scheduler.scheduler import Scheduler
 
 
-class PolynomiaLR(LRScheduler):
+class PolynomiaLR(_LRScheduler):
     def __init__(self, optimizer, step_size, iter_warmup, iter_max, power, min_lr=0, last_epoch=-1):
         self.step_size = step_size
         self.iter_warmup = int(iter_warmup)
