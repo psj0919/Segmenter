@@ -145,8 +145,7 @@ class Trainer():
                 loss.backward()
                 self.optimizer.step()
                 #
-                num_updates += 1
-                self.scheduler.step_update(num_updates=num_updates)
+
                 #
                 if self.global_step % self.cfg['solver']['print_freq'] == 0:
                     self.writer.add_scalar(tag='train/loss', scalar_value=loss, global_step=self.global_step)
@@ -161,6 +160,8 @@ class Trainer():
                                           dataformats='HWC', global_step=self.global_step)
             print("Complete {}_epoch".format(curr_epoch))
 
+            num_updates += 1
+            self.scheduler.step_update(num_updates=num_updates)
 
             self.writer.add_scalar(tag='train/lr', scalar_value=self.optimizer.param_groups[0]['lr'],
                                    global_step=curr_epoch)
