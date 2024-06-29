@@ -53,6 +53,8 @@ def get_config_dict():
         loss="crossentropy",
         weight_decay=5e-4,
         print_freq=20,
+        lr=0.001,
+
     )
     model = dict(
         backbone = dict(

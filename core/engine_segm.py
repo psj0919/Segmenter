@@ -24,8 +24,10 @@ class Trainer():
         self.val_loader = self.get_val_dataloader()
         self.opt_cfg = self.setup_opt_cfg()
         self.model = self.setup_network()
-        self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)
-        self.scheduler = self.setup_scheduler(self.opt_cfg, self.optimizer)
+        # self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)
+        # self.scheduler = self.setup_scheduler(self.opt_cfg, self.optimizer)
+        self.optimizer = self.setup_optimizer_adam()
+        self.scheduler = self.setup_scheduler_step()
         self.loss = self.setup_loss()
         self.save_path = self.cfg['model']['save_dir']
         self.writer = SummaryWriter(log_dir = self.save_path)
@@ -90,7 +92,24 @@ class Trainer():
 
         return loader
 
+    def setup_optimizer_adam(self):
+        if self.cfg['solver']['optimizer'] == "sgd":
+            optimizer = torch.optim.SGD(params=self.model.parameters(), lr=self.cfg['solver']['lr'],
+                                        weight_decay=self.cfg['solver']['weight_decay'])
+        elif self.cfg['solver']['optimizer'] == "adam":
+            optimizer = torch.optim.Adam(params=self.model.parameters(), lr=self.cfg['solver']['lr'],
+                                         weight_decay=self.cfg['solver']['weight_decay'])
+        else:
+            raise NotImplementedError("Not Implemented {}".format(self.cfg['solver']['optimizer']))
 
+        return optimizer
+
+    def setup_scheduler_step(self):
+        if self.cfg['solver']['scheduler'] == 'steplr':
+            scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, self.cfg['solver']['step_size'],
+                                                        self.cfg['solver']['gamma'])
+
+        return scheduler
 
     def setup_network(self):
         model = create_segmenter(self.cfg)
@@ -105,7 +124,7 @@ class Trainer():
 
     def setup_loss(self):
         if self.cfg['solver']['loss'] == 'crossentropy':
-            loss = torch.nn.BCEWithLogitsLoss()
+            loss = torch.nn.BCEWithLogitsLoss(reduction='sum')
         else:
             raise("Please check loss name...")
         return loss
@@ -160,8 +179,9 @@ class Trainer():
                                           dataformats='HWC', global_step=self.global_step)
             print("Complete {}_epoch".format(curr_epoch))
 
-            num_updates += 1
-            self.scheduler.step_update(num_updates=num_updates)
+            # num_updates += 1
+            # self.scheduler.step_update(num_updates=num_updates)
+            self.scheduler.step()
 
             self.writer.add_scalar(tag='train/lr', scalar_value=self.optimizer.param_groups[0]['lr'],
                                    global_step=curr_epoch)
