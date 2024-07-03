@@ -6,6 +6,7 @@ import math
 from collections import defaultdict
 from timm.models.layers import trunc_normal_
 
+
 def init_weights(m):
     if isinstance(m, nn.Linear):
         trunc_normal_(m.weight, std=0.02)
@@ -14,6 +15,7 @@ def init_weights(m):
     elif isinstance(m, nn.LayerNorm):
         nn.init.constant_(m.bias, 0)
         nn.init.constant_(m.weight, 1.0)
+
 
 def resize_pos_embed(posemb, grid_old_shape, grid_new_shape, num_extra_tokens):
     posemb_tok, posemb_grid = (
@@ -139,37 +141,6 @@ def merge_windows(windows, window_size, ori_shape):
         logit = torch.flip(logit, (2,))
     result = F.softmax(logit, 0)
     return result
-
-
-def inference(
-    model,
-    ims,
-    ims_metas,
-    ori_shape,
-    window_size,
-    window_stride,
-    batch_size,
-):
-    C = model.n_cls
-    seg_map = torch.zeros((C, ori_shape[0], ori_shape[1]), device=ptu.device)
-    for im, im_metas in zip(ims, ims_metas):
-        im = im.to(ptu.device)
-        im = resize(im, window_size)
-        flip = im_metas["flip"]
-        windows = sliding_window(im, flip, window_size, window_stride)
-        crops = torch.stack(windows.pop("crop"))[:, 0]
-        B = len(crops)
-        WB = batch_size
-        seg_maps = torch.zeros((B, C, window_size, window_size), device=im.device)
-        with torch.no_grad():
-            for i in range(0, B, WB):
-                seg_maps[i : i + WB] = model.forward(crops[i : i + WB])
-        windows["seg_maps"] = seg_maps
-        im_seg_map = merge_windows(windows, window_size, ori_shape)
-        seg_map += im_seg_map
-    seg_map /= len(ims)
-    return seg_map
-
 def num_params(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     n_params = sum([torch.prod(torch.tensor(p.size())) for p in model_parameters])
