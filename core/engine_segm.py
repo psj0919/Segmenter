@@ -108,6 +108,13 @@ class Trainer():
         if self.cfg['solver']['scheduler'] == 'steplr':
             scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, self.cfg['solver']['step_size'],
                                                         self.cfg['solver']['gamma'])
+        elif self.cfg['solver']['scheduler'] == 'cyclelr':
+            scheduler = torch.optim.lr_scheduler.CyclicLR(self.optimizer, base_lr=1e-7,
+                                                          max_lr=self.cfg['solver']['lr'],
+                                                          step_size_up=int(self.cfg['dataset']['epochs'] / 5 * 0.7),
+                                                          step_size_down=int(self.cfg['dataset']['epochs'] / 5) - int(self.cfg['dataset']['epochs'] / 5 * 0.7),
+                                                          cycle_momentum=False,
+                                                          gamma=0.9)
 
         return scheduler
 
@@ -124,7 +131,7 @@ class Trainer():
 
     def setup_loss(self):
         if self.cfg['solver']['loss'] == 'crossentropy':
-            loss = torch.nn.BCEWithLogitsLoss(reduction='sum')
+            loss = torch.nn.CrossEntropyLoss(reduction='sum')
         else:
             raise("Please check loss name...")
         return loss
@@ -155,10 +162,13 @@ class Trainer():
                 self.global_step += 1
                 data = data.to(self.device)
                 target = target.to(self.device)
-                target_ = target.long()
-                out = self.model.forward(data)
+                label = label.to(self.device)
                 #
-                loss = 10 * self.loss(out, target)
+                label = label.type(torch.long)
+                out = self.model.forward(data)
+                out = out.type(torch.float32)
+                #
+                loss = 10 * self.loss(out, label)
                 #
                 self.optimizer.zero_grad()
                 loss.backward()

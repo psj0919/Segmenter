@@ -34,7 +34,7 @@ def get_config_dict():
         num_class = num_class,
         epochs = 200,
         eval_freq =2,
-        batch_size = 8,
+        batch_size = 1,
         lr = 0.001,
         image_size= 512,
         crop_size= 512,
@@ -47,23 +47,23 @@ def get_config_dict():
     )
     solver = dict(
         optimizer = "adam",
-        scheduler='steplr',
+        scheduler='cyclelr',
         step_size=5,
         gamma=0.95,
         loss="crossentropy",
         weight_decay=5e-4,
         print_freq=20,
-        lr=0.001,
+        lr=1e-4,
 
     )
     model = dict(
         backbone = dict(
             name= " vit_base_patch8_384",
-            image_size= (224, 224),
+            image_size= (512, 512),
             patch_size= 8,
             d_model= 768,
-            n_heads= 12,
-            n_layers= 12,
+            n_heads= 8,
+            n_layers= 6,
             d_ff = 0,
             normalization= "vit",
             n_cls= num_class,
