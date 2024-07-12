@@ -14,6 +14,14 @@ from timm import optim
 from optim.scheduler import PolynomiaLR
 from torch.utils.tensorboard import SummaryWriter
 
+CLASSES = [
+    'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
+    'freespace', 'curb', 'safetyZone', 'roadMark', 'whiteLane',
+    'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
+    'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
+]
+
+except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
 class Trainer():
     def __init__(self, cfg):
@@ -202,10 +210,15 @@ class Trainer():
     def validation(self):
         self.model.eval()
         total_ious = []
-        total_accs = []
+        total_accs = {}
         cls = []
         cls_count = []
-
+        #
+        for i in range(len(CLASSES)):
+            CLASSES[i] = CLASSES[i].lower()
+        for c in CLASSES:
+            total_accs[c] = []
+        #
         for iter, (data, target, label, idx) in enumerate(self.val_loader):
             data = data.to(self.device)
             target = target.to(self.device)
@@ -234,13 +247,14 @@ class Trainer():
 
             # Pixel Acc
             for p, t in zip(pred, label):
-                total_accs.append(self.pixel_acc(p.cpu(), t.cpu()))
+                x = self.pixel_acc_cls(p.cpu(), t.cpu(), cls)
 
-        pixel_accs = np.array(total_accs).mean()
+            for idx, c in enumerate(cls):
+                total_accs[c].append(x[idx])
 
         self.model.train()
 
-        return avr_ious, pixel_accs, cls, org_cls, target_crop_image, pred_crop_image
+        return avr_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image
 
 
 
@@ -419,13 +433,6 @@ class Trainer():
 
     def trg_to_class_rgb(self, target, cls):
         assert len(target.shape) == 3
-
-        CLASSES = [
-            'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
-            'freespace', 'curb', 'safetyZone', 'roadMark', 'whiteLane',
-            'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
-            'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
-        ]
         for i in range(len(CLASSES)):
             CLASSES[i] = CLASSES[i].lower()
 
@@ -451,12 +458,6 @@ class Trainer():
     def pred_to_class_rgb(self, pred, cls):
         assert len(pred.shape) == 3
         #
-        CLASSES = [
-            'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
-            'freespace', 'curb', 'safetyZone', 'roadMark', 'whiteLane',
-            'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
-            'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
-        ]
         for i in range(len(CLASSES)):
             CLASSES[i] = CLASSES[i].lower()
         #
@@ -487,11 +488,25 @@ class Trainer():
         return (np.transpose(npimg, (1, 2, 0))[:, :, ::-1] * 255).astype(np.uint8)
 
     @staticmethod
-    def pixel_acc(pred, target):
-        correct = (pred ==target).sum()
-        total = (target== target).sum()
+    def pixel_acc_cls(pred, target, cls):
+        for i in range(len(CLASSES)):
+            CLASSES[i] = CLASSES[i].lower()
+        for j in range(len(except_classes)):
+            except_classes[j] = except_classes[j].lower()
+        class_acc = []
+        for c in cls:
+            if c in except_classes:
+                pass
+            else:
+                index = CLASSES.index(c)
+                cls_mask = (target == index)
+                correct = (pred[cls_mask] == index).sum()
+                total = cls_mask.sum()
 
-        return correct / total
+                class_acc.append(correct / total)
+
+        return class_acc
+
 
 
 
