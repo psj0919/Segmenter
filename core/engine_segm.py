@@ -294,42 +294,55 @@ class Trainer():
         ious = []
         org_cls = []
         #
+        for i in range(len(CLASSES)):
+            CLASSES[i] = CLASSES[i].lower()
+        #
         org_res = (1920, 1080)
-        target_res = (224, 224)
+        target_res = (512, 512)
         #
         scale_x = target_res[0] / org_res[0]
         scale_y = target_res[1] / org_res[1]
         count = 0
         for i in range(len(json_path)):
             polygon = json_path[i]['polygon']
-            cls = json_path[i]['class']
-            for j in range(len(polygon)):
-                if j % 2 == 0:
-                    polygon[j] = polygon[j] * scale_x
-                else:
-                    polygon[j] = polygon[j] * scale_y
-
-            polygon = np.array(polygon, np.int32).reshape(-1, 2)
-            if polygon.size == 0:
+            cls = json_path[i]['class'].lower()
+            if cls in except_classes:
                 pass
             else:
+                for j in range(len(polygon)):
+                    if j % 2 == 0:
+                        polygon[j] = polygon[j] * scale_x
+                    else:
+                        polygon[j] = polygon[j] * scale_y
 
-                x_min = np.min(polygon[:, 0])
-                y_min = np.min(polygon[:, 1])
-                x_max = np.max(polygon[:, 0])
-                y_max = np.max(polygon[:, 1])
-                if (x_min == x_max) or (y_min==y_max):
+                polygon = np.array(polygon, np.int32).reshape(-1, 2)
+                if polygon.size == 0:
                     pass
                 else:
-                    #
-                    crop_target_image = target_image[:, y_min:y_max:, x_min:x_max]
-                    crop_pred_image = pred_image[:, y_min:y_max:, x_min:x_max]
-                    #
-                    crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-                    crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-                    org_cls.append(cls)
-                    iou = self.iou(crop_pred_image, crop_target_image, cls)
-                    ious.append(iou)
+                    x_min = np.min(polygon[:, 0])
+                    y_min = np.min(polygon[:, 1])
+                    x_max = np.max(polygon[:, 0])
+                    y_max = np.max(polygon[:, 1])
+                    if (x_min == x_max) or (y_min == y_max):
+                        pass
+                    else:
+                        # make Class index
+                        if cls not in CLASSES:
+                            print("error")
+                        else:
+                            x = CLASSES.index(cls)
+                        #
+                        crop_target_image = target_image[:, y_min:y_max:, x_min:x_max]
+                        crop_target_image[crop_target_image != x] = 0
+                        #
+                        crop_pred_image = pred_image[:, y_min:y_max:, x_min:x_max]
+                        crop_pred_image[crop_pred_image != x] = 0
+                        #
+                        crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
+                        crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
+                        org_cls.append(cls)
+                        iou = self.iou(crop_pred_image, crop_target_image, cls)
+                        ious.append(iou)
 
         return ious
 
