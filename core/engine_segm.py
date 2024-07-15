@@ -32,9 +32,9 @@ class Trainer():
         self.val_loader = self.get_val_dataloader()
         self.opt_cfg = self.setup_opt_cfg()
         self.model = self.setup_network()
-        # self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)
-        # self.scheduler = self.setup_scheduler(self.opt_cfg, self.optimizer)
-        self.optimizer = self.setup_optimizer_adam()
+        self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)    # optimizer check[y/n]
+        # self.scheduler = self.setup_scheduler(self.opt_cfg, self.optimizer)  # scheduler check[y/n]
+        # self.optimizer = self.setup_optimizer_adam()
         self.scheduler = self.setup_scheduler_step()
         self.loss = self.setup_loss()
         self.save_path = self.cfg['model']['save_dir']
@@ -59,7 +59,7 @@ class Trainer():
         optimizer_kwargs = dict(
             opt = 'adam',
             sched= "polynomial" ,
-            lr=self.cfg['dataset']['lr'],
+            lr=self.cfg['solver']['lr'],
             weight_decay=self.cfg['solver']['weight_decay'],
             momentum=0.9,
             clip_grad=None,
@@ -261,7 +261,7 @@ class Trainer():
     def save_model(self, save_path):
         save_file = 'Segmenter_epochs:{}_optimizer:{}_lr:{}_model{}.pth'.format(self.cfg['dataset']['epochs'],
                                                                           self.cfg['solver']['optimizer'],
-                                                                          self.cfg['dataset']['lr'],
+                                                                          self.cfg['solver']['lr'],
                                                                           self.cfg['model']['backbone']['name'])
         path = os.path.join(save_path, save_file)
         torch.save({'model': deepcopy(self.model), 'optimizer': self.optimizer.state_dict()}, path)

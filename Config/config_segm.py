@@ -35,14 +35,12 @@ def get_config_dict():
         epochs = 200,
         eval_freq =2,
         batch_size = 1,
-        lr = 0.001,
         image_size= 512,
         crop_size= 512,
-        window_size= 512,
         window_stride= 512
     )
     args = dict(
-        gpu_id='1',
+        gpu_id='0',
         num_workers = 3
     )
     solver = dict(
@@ -59,7 +57,7 @@ def get_config_dict():
     model = dict(
         backbone = dict(
             name= " vit_base_patch8_384",
-            image_size= (512, 512),
+            image_size= (256, 256),
             patch_size= 8,
             d_model= 768,
             n_heads= 8,
@@ -71,7 +69,7 @@ def get_config_dict():
         ),
         resume = ' ',
         save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train',
-        checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm'
+        checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/256'
     )
 
     decoder = dict(

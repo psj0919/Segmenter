@@ -30,7 +30,7 @@ class vehicledata():
         self.annotation_path = annotation_path
         self.ann_file = sorted(os.listdir(self.annotation_path))
         #
-        self.size = (512, 512)
+        self.size = (256, 256)
         self.n_class = n_class
 
     def __len__(self):
