@@ -32,9 +32,9 @@ class Trainer():
         self.val_loader = self.get_val_dataloader()
         self.opt_cfg = self.setup_opt_cfg()
         self.model = self.setup_network()
-        self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)    # optimizer check[y/n]
-        # self.scheduler = self.setup_scheduler(self.opt_cfg, self.optimizer)  # scheduler check[y/n]
         # self.optimizer = self.setup_optimizer_adam()
+        self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)    # optimizer check[y/n]
+        # self.scheduler = self.setup_scheduler(self.opt_cfg, self.optimizer)  # scheduler check[y/n] n
         self.scheduler = self.setup_scheduler_step()
         self.loss = self.setup_loss()
         self.save_path = self.cfg['model']['save_dir']
@@ -163,7 +163,8 @@ class Trainer():
                     self.writer.add_image('pred /' + org_cls[i], self.pred_to_class_rgb(pred_crop_image[i], org_cls[i]),
                                           dataformats='HWC', global_step=1)
                 # Pixel Acc
-                self.writer.add_scalar(tag='pixel_accs', scalar_value=pixel_accs.mean(), global_step=self.global_step)
+                for i in range(len(cls)):
+                    self.writer.add_scalar(tag='pixel_accs/{}'.format(cls[i]), scalar_value=np.mean(pixel_accs[cls[i]]), global_step=self.global_step)
             #
             for batch_idx, (data, target, label, index) in (enumerate(self.train_loader)):
 
@@ -298,7 +299,7 @@ class Trainer():
             CLASSES[i] = CLASSES[i].lower()
         #
         org_res = (1920, 1080)
-        target_res = (512, 512)
+        target_res = (256, 256)
         #
         scale_x = target_res[0] / org_res[0]
         scale_y = target_res[1] / org_res[1]
@@ -380,12 +381,12 @@ class Trainer():
                     y_min = 0
                 #
                 x_max = np.max(polygon[:, 0]) + 20
-                if x_max > 512:
-                    x_max = 512
+                if x_max > 256:
+                    x_max = 256
                 #
                 y_max = np.max(polygon[:, 1]) + 20
-                if y_max > 512:
-                    y_max = 512
+                if y_max > 256:
+                    y_max = 256
                 #
                 if (x_min == x_max) or (y_min == y_max):
                     pass
