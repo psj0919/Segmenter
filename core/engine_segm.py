@@ -32,8 +32,8 @@ class Trainer():
         self.val_loader = self.get_val_dataloader()
         self.opt_cfg = self.setup_opt_cfg()
         self.model = self.setup_network()
-        # self.optimizer = self.setup_optimizer_adam()
-        self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)    # optimizer check[y/n]
+        self.optimizer = self.setup_optimizer_adam()
+        # self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)    # optimizer check[y/n]
         # self.scheduler = self.setup_scheduler(self.opt_cfg, self.optimizer)  # scheduler check[y/n] n
         self.scheduler = self.setup_scheduler_step()
         self.loss = self.setup_loss()
