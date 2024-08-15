@@ -5,6 +5,7 @@ import tqdm
 import json
 import numpy as np
 
+from core.functions import *
 from copy import deepcopy
 from dataset.dataset import vehicledata
 from Segmenter.factory import create_segmenter
@@ -14,14 +15,14 @@ from timm import optim
 from optim.scheduler import PolynomiaLR
 from torch.utils.tensorboard import SummaryWriter
 
+except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight', 'background']
+
 CLASSES = [
     'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
     'freespace', 'curb', 'safetyZone', 'roadMark', 'whiteLane',
     'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
     'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
 ]
-
-except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
 class Trainer():
     def __init__(self, cfg):
@@ -33,8 +34,6 @@ class Trainer():
         self.opt_cfg = self.setup_opt_cfg()
         self.model = self.setup_network()
         self.optimizer = self.setup_optimizer_adam()
-        # self.optimizer = self.setup_optimizer(self.opt_cfg, self.model)    # optimizer check[y/n]
-        # self.scheduler = self.setup_scheduler(self.opt_cfg, self.optimizer)  # scheduler check[y/n] n
         self.scheduler = self.setup_scheduler_step()
         self.loss = self.setup_loss()
         self.save_path = self.cfg['model']['save_dir']
@@ -158,9 +157,9 @@ class Trainer():
                     self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step = self.global_step)
                 # Crop Image
                 for i in range(len(target_crop_image)):
-                    self.writer.add_image('target /' + org_cls[i], self.trg_to_class_rgb(target_crop_image[i], org_cls[i]),
+                    self.writer.add_image('target /' + org_cls[i], trg_to_class_rgb(target_crop_image[i], org_cls[i]),
                                           dataformats='HWC', global_step=1)
-                    self.writer.add_image('pred /' + org_cls[i], self.pred_to_class_rgb(pred_crop_image[i], org_cls[i]),
+                    self.writer.add_image('pred /' + org_cls[i], pred_to_class_rgb(pred_crop_image[i], org_cls[i]),
                                           dataformats='HWC', global_step=1)
                 # Pixel Acc
                 for i in range(len(cls)):
@@ -188,13 +187,13 @@ class Trainer():
                 if self.global_step % self.cfg['solver']['print_freq'] == 0:
                     self.writer.add_scalar(tag='train/loss', scalar_value=loss, global_step=self.global_step)
                 if self.global_step % (10 * self.cfg['solver']['print_freq']) ==0:
-                    self.writer.add_image('train/train_image', self.matplotlib_imshow(data[0].to('cpu')),
+                    self.writer.add_image('train/train_image', matplotlib_imshow(data[0].to('cpu')),
                                           dataformats='HWC', global_step=self.global_step)
                     self.writer.add_image('train/predict_image',
-                                          self.pred_to_rgb(out[0]),
+                                          pred_to_rgb(out[0]),
                                           dataformats='HWC', global_step=self.global_step)
                     self.writer.add_image('train/target_image',
-                                          self.trg_to_rgb(target[0]),
+                                          trg_to_rgb(target[0]),
                                           dataformats='HWC', global_step=self.global_step)
             print("Complete {}_epoch".format(curr_epoch))
 
@@ -227,11 +226,11 @@ class Trainer():
             logits = self.model(data)
             pred = logits.softmax(dim=1).argmax(dim=1).to('cpu')
             target_ = target.softmax(dim=1).argmax(dim=1).to('cpu')
-            file, json_path = self.load_json_file(int(idx))
+            file, json_path = load_json_file(int(idx))
             # Iou
-            iou = self.make_bbox(file, json_path, target_, pred)
+            iou = make_bbox(file, json_path, target_, pred)
             # Crop image
-            target_crop_image, pred_crop_image, org_cls = self.crop_image(target[0], logits[0], json_path)
+            target_crop_image, pred_crop_image, org_cls = crop_image(target[0], logits[0], json_path)
 
             for i in range(len(iou)):
                 for key, val in iou[i].items():
@@ -248,7 +247,7 @@ class Trainer():
 
             # Pixel Acc
             for p, t in zip(pred, label):
-                x = self.pixel_acc_cls(p.cpu(), t.cpu(), cls)
+                x = pixel_acc_cls(p.cpu(), t.cpu(), cls)
 
             for idx, c in enumerate(cls):
                 total_accs[c].append(x[idx])
@@ -256,7 +255,6 @@ class Trainer():
         self.model.train()
 
         return avr_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image
-
 
 
     def save_model(self, save_path):
@@ -268,258 +266,6 @@ class Trainer():
         torch.save({'model': deepcopy(self.model), 'optimizer': self.optimizer.state_dict()}, path)
         print("Success save")
 
-    def load_json_file(self, idx):
-        json_path = '/storage/sjpark/vehicle_data/Dataset/val_json/'
-        idx_json = sorted(os.listdir(json_path))
-        expected_cls = ['background', 'motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk',
-                        'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
-        for i in range(len(expected_cls)):
-            expected_cls[i] = expected_cls[i].lower()
-
-        json_file = os.path.join(json_path, idx_json[idx])
-        with open(json_file, 'r') as f:
-            json_data1 = json.load(f)
-        json_data = json_data1['annotations']
-        # json_cls_data = json_data1['class']
-        ann_json = []
-        #
-        for i in range(len(json_data)):
-            if any(keyword in json_data[i]['class'] for keyword in expected_cls):
-                pass
-            else:
-                ann_json.append(json_data[i])
-
-        return idx_json[idx], ann_json
-
-    def make_bbox(self, file, json_path, target_image, pred_image):
-        ious = []
-        org_cls = []
-        #
-        for i in range(len(CLASSES)):
-            CLASSES[i] = CLASSES[i].lower()
-        #
-        org_res = (1920, 1080)
-        target_res = (256, 256)
-        #
-        scale_x = target_res[0] / org_res[0]
-        scale_y = target_res[1] / org_res[1]
-        count = 0
-        for i in range(len(json_path)):
-            polygon = json_path[i]['polygon']
-            cls = json_path[i]['class'].lower()
-            if cls in except_classes:
-                pass
-            else:
-                for j in range(len(polygon)):
-                    if j % 2 == 0:
-                        polygon[j] = polygon[j] * scale_x
-                    else:
-                        polygon[j] = polygon[j] * scale_y
-
-                polygon = np.array(polygon, np.int32).reshape(-1, 2)
-                if polygon.size == 0:
-                    pass
-                else:
-                    x_min = np.min(polygon[:, 0])
-                    y_min = np.min(polygon[:, 1])
-                    x_max = np.max(polygon[:, 0])
-                    y_max = np.max(polygon[:, 1])
-                    if (x_min == x_max) or (y_min == y_max):
-                        pass
-                    else:
-                        # make Class index
-                        if cls not in CLASSES:
-                            print("error")
-                        else:
-                            x = CLASSES.index(cls)
-                        #
-                        crop_target_image = target_image[:, y_min:y_max:, x_min:x_max]
-                        crop_target_image[crop_target_image != x] = 0
-                        #
-                        crop_pred_image = pred_image[:, y_min:y_max:, x_min:x_max]
-                        crop_pred_image[crop_pred_image != x] = 0
-                        #
-                        crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-                        crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-                        org_cls.append(cls)
-                        iou = self.iou(crop_pred_image, crop_target_image, cls)
-                        ious.append(iou)
-
-        return ious
-
-    def iou(self, pred, target, cls, thr=0.5, dim=(2, 3), epsilon=0.001):
-        ious = {}
-        y_true = target.to(torch.float32)
-        y_pred = pred.to(torch.float32)
-
-        inter = (y_true * y_pred).sum(dim=(0, 1))
-        union = (y_true + y_pred - y_true * y_pred).sum(dim=(0, 1))
-
-        iou = ((inter + epsilon) / (union + epsilon)).mean()
-        ious[cls] = iou
-        return ious
-
-    def crop_image(self, target, pred, json_path):
-        target_image_list = []
-        pred_image_list = []
-        cls_list = []
-        count = 0
-        #
-        for i in range(len(json_path)):
-            polygon = json_path[i]['polygon']
-            cls = json_path[i]['class']
-            polygon = np.array(polygon, np.int32).reshape(-1, 2)
-            if polygon.size == 0:
-                pass
-            else:
-                x_min = np.min(polygon[:, 0]) - 20
-                if x_min < 0:
-                    x_min = 0
-                #
-                y_min = np.min(polygon[:, 1]) - 20
-                if y_min < 0:
-                    y_min = 0
-                #
-                x_max = np.max(polygon[:, 0]) + 20
-                if x_max > 256:
-                    x_max = 256
-                #
-                y_max = np.max(polygon[:, 1]) + 20
-                if y_max > 256:
-                    y_max = 256
-                #
-                if (x_min == x_max) or (y_min == y_max):
-                    pass
-                else:
-                    crop_target_image = target[:, y_min:y_max:, x_min:x_max]
-                    crop_pred_image = pred[:, y_min:y_max:, x_min:x_max]
-                    target_image_list.append(crop_target_image)
-                    pred_image_list.append(crop_pred_image)
-                    cls_list.append(cls)
-        if len(cls_list) != len(target_image_list):
-            print("error")
-
-        return target_image_list, pred_image_list, cls_list
-
-    def pred_to_rgb(self, pred):
-        assert len(pred.shape) == 3
-        #
-        pred = pred.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
-        #
-        pred = pred.detach().cpu().numpy()
-        #
-        pred_rgb = np.zeros_like(pred, dtype=np.uint8)
-        pred_rgb = np.repeat(np.expand_dims(pred_rgb[:, :], axis=-1), 3, -1)
-        #
-        color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
-                       5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
-                       9: (64, 64, 64), 10: (0, 0, 192), 11: (192, 0, 192), 12: (0, 192, 192),
-                       13: (192, 192, 192), 14: (64, 128, 0), 15: (192, 0, 128), 16: (64, 128, 128),
-                       17: (192, 128, 128), 18: (128, 64, 0), 19: (128, 192, 0), 20: (0, 64, 128)}
-        #
-        for i in range(self.cfg['dataset']['num_class']):
-            pred_rgb[pred == i] = np.array(color_table[i])
-
-        return pred_rgb
-
-
-
-    def trg_to_rgb(self, target):
-        assert len(target.shape) == 3
-        #
-        target = target.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
-        #
-        target = target.detach().cpu().numpy()
-        #
-        target_rgb = np.zeros_like(target, dtype=np.uint8)
-        target_rgb = np.repeat(np.expand_dims(target_rgb[:, :], axis=-1), 3, -1)
-        #
-        color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
-                       5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
-                       9: (64, 64, 64), 10: (0, 0, 192), 11: (192, 0, 192), 12: (0, 192, 192),
-                       13: (192, 192, 192), 14: (64, 128, 0), 15: (192, 0, 128), 16: (64, 128, 128),
-                       17: (192, 128, 128), 18: (128, 64, 0), 19: (128, 192, 0), 20: (0, 64, 128)}
-        #
-        for i in range(self.cfg['dataset']['num_class']):
-            target_rgb[target == i] = np.array(color_table[i])
-
-        return target_rgb
-
-    def trg_to_class_rgb(self, target, cls):
-        assert len(target.shape) == 3
-        for i in range(len(CLASSES)):
-            CLASSES[i] = CLASSES[i].lower()
-
-        color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
-                       5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
-                       9: (64, 64, 64), 10: (0, 0, 192), 11: (192, 0, 192), 12: (0, 192, 192),
-                       13: (192, 192, 192), 14: (64, 128, 0), 15: (192, 0, 128), 16: (64, 128, 128),
-                       17: (192, 128, 128), 18: (128, 64, 0), 19: (128, 192, 0), 20: (0, 64, 128)}
-
-        #
-        target = target.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
-        #
-        target = target.detach().cpu().numpy()
-        #
-        target_rgb = np.zeros_like(target, dtype=np.uint8)
-        target_rgb = np.repeat(np.expand_dims(target_rgb[:, :], axis=-1), 3, -1)
-
-        i = CLASSES.index(cls.lower())
-        target_rgb[target == i] = np.array(color_table[i])
-
-        return target_rgb
-
-    def pred_to_class_rgb(self, pred, cls):
-        assert len(pred.shape) == 3
-        #
-        for i in range(len(CLASSES)):
-            CLASSES[i] = CLASSES[i].lower()
-        #
-        color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
-                       5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
-                       9: (64, 64, 64), 10: (0, 0, 192), 11: (192, 0, 192), 12: (0, 192, 192),
-                       13: (192, 192, 192), 14: (64, 128, 0), 15: (192, 0, 128), 16: (64, 128, 128),
-                       17: (192, 128, 128), 18: (128, 64, 0), 19: (128, 192, 0), 20: (0, 64, 128)}
-
-        #
-        #
-        pred = pred.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
-        #
-        pred = pred.detach().cpu().numpy()
-        #
-        pred_rgb = np.zeros_like(pred, dtype=np.uint8)
-        pred_rgb = np.repeat(np.expand_dims(pred_rgb[:, :], axis=-1), 3, -1)
-        #
-        i = CLASSES.index(cls.lower())
-        pred_rgb[pred == i] = np.array(color_table[i])
-
-        return pred_rgb
-
-    @staticmethod
-    def matplotlib_imshow(img):
-        assert len(img.shape) == 3
-        npimg = img.numpy()
-        return (np.transpose(npimg, (1, 2, 0))[:, :, ::-1] * 255).astype(np.uint8)
-
-    @staticmethod
-    def pixel_acc_cls(pred, target, cls):
-        for i in range(len(CLASSES)):
-            CLASSES[i] = CLASSES[i].lower()
-        for j in range(len(except_classes)):
-            except_classes[j] = except_classes[j].lower()
-        class_acc = []
-        for c in cls:
-            if c in except_classes:
-                pass
-            else:
-                index = CLASSES.index(c)
-                cls_mask = (target == index)
-                correct = (pred[cls_mask] == index).sum()
-                total = cls_mask.sum()
-
-                class_acc.append(correct / total)
-
-        return class_acc
 
 
 
