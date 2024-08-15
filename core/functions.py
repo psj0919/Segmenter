@@ -88,7 +88,7 @@ def trg_to_class_rgb(target, cls):
     return target_rgb
 
 
-def pred_to_class_rgb(self, pred, cls):
+def pred_to_class_rgb(pred, cls):
     assert len(pred.shape) == 3
     #
     for i in range(len(CLASSES)):
