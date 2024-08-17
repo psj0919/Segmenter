@@ -2,7 +2,7 @@ import numpy as np
 import os
 import json
 import torch
-from Config.config_segm import get_config_dict
+from Config.config import get_config_dict
 
 except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight', 'background']
 
@@ -67,7 +67,9 @@ def trg_to_class_rgb(target, cls):
 
     for i in range(len(CLASSES)):
         CLASSES[i] = CLASSES[i].lower()
-
+    #
+    cls = cls.lower()
+    #
     color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
                    5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
                    9: (64, 64, 64), 10: (0, 0, 192), 11: (192, 0, 192), 12: (0, 192, 192),
@@ -93,6 +95,8 @@ def pred_to_class_rgb(pred, cls):
     #
     for i in range(len(CLASSES)):
         CLASSES[i] = CLASSES[i].lower()
+    #
+    cls = cls.lower()
     #
     color_table = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (0, 0, 128), 4: (128, 128, 0),
                    5: (128, 0, 128), 6: (0, 128, 128), 7: (128, 128, 128), 8: (0, 64, 64),
@@ -148,6 +152,9 @@ def load_json_file(idx):
 
 #------------------------------------------------------calculate_IoU-----------------------------------------------------#
 def IoU(pred, target, cls, thr=0.5, dim=(2, 3), epsilon=0.001):
+    #
+    cls = cls.lower()
+    #
     ious = {}
     y_true = target.to(torch.float32)
     y_pred = pred.to(torch.float32)
@@ -266,10 +273,16 @@ def crop_image(target, pred, json_path):
 
 #-----------------------------------------------------Calculate_pixel_Acc------------------------------------------------#
 def pixel_acc_cls(pred, target, cls):
+    #
     for i in range(len(CLASSES)):
         CLASSES[i] = CLASSES[i].lower()
+    #
     for j in range(len(except_classes)):
         except_classes[j] = except_classes[j].lower()
+    #
+    for j in range(len(cls)):
+        cls[j] = cls[j].lower()
+    #
     class_acc = []
     for c in cls:
         if c in except_classes:

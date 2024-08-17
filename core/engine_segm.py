@@ -225,8 +225,12 @@ class Trainer():
         #
         for i in range(len(CLASSES)):
             CLASSES[i] = CLASSES[i].lower()
+        #
         for c in CLASSES:
-            total_accs[c] = []
+            if c in except_classes:
+                pass
+            else:
+                total_accs[c] = []
         #
         for iter, (data, target, label, idx) in enumerate(self.val_loader):
             data = data.to(self.device)
