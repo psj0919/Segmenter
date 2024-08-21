@@ -2,9 +2,12 @@ import numpy as np
 import os
 import json
 import torch
-from Config.config import get_config_dict
+import matplotlib.pyplot as plt
 
-except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight', 'background']
+
+from Config.config_test_segm import get_config_dict
+
+except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
 CLASSES = [
     'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
@@ -21,7 +24,7 @@ cfg = get_config_dict()
 def pred_to_rgb(pred):
     assert len(pred.shape) == 3
     #
-    pred = pred.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
+    pred = pred.softmax(dim=0).argmax(dim=0).to('cpu')
     #
     pred = pred.detach().cpu().numpy()
     #
@@ -43,7 +46,7 @@ def pred_to_rgb(pred):
 def trg_to_rgb(target):
     assert len(target.shape) == 3
     #
-    target = target.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
+    target = target.softmax(dim=0).argmax(dim=0).to('cpu')
     #
     target = target.detach().cpu().numpy()
     #
@@ -77,7 +80,7 @@ def trg_to_class_rgb(target, cls):
                    17: (192, 128, 128), 18: (128, 64, 0), 19: (128, 192, 0), 20: (0, 64, 128)}
 
     #
-    target = target.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
+    target = target.softmax(dim=0).argmax(dim=0).to('cpu')
     #
     target = target.detach().cpu().numpy()
     #
@@ -106,7 +109,7 @@ def pred_to_class_rgb(pred, cls):
 
     #
     #
-    pred = pred.to('cpu').softmax(dim=0).argmax(dim=0).to('cpu')
+    pred = pred.softmax(dim=0).argmax(dim=0).to('cpu')
     #
     pred = pred.detach().cpu().numpy()
     #
@@ -128,7 +131,11 @@ def matplotlib_imshow(img):
 
 #-----------------------------------------------------load_jsonfile------------------------------------------------------#
 def load_json_file(idx):
-    json_path = '/storage/sjpark/vehicle_data/Dataset/val_json/'
+    if cfg['model']['mode'] == 'train':
+        json_path = '/storage/sjpark/vehicle_data/Dataset/val_json/'
+    elif cfg['model']['mode'] == 'test':
+        json_path = '/storage/sjpark/vehicle_data/Dataset/test_json/'
+
     idx_json = sorted(os.listdir(json_path))
     for i in range(len(except_classes)):
         except_classes[i] = except_classes[i].lower()
@@ -151,7 +158,7 @@ def load_json_file(idx):
 #------------------------------------------------------------------------------------------------------------------------#
 
 #------------------------------------------------------calculate_IoU-----------------------------------------------------#
-def IoU(pred, target, cls, thr=0.5, dim=(2, 3), epsilon=0.001):
+def IoU(pred, target, cls, thr=0.5, dim=(2, 3), epsilon=1e-5):
     #
     cls = cls.lower()
     #
@@ -162,7 +169,7 @@ def IoU(pred, target, cls, thr=0.5, dim=(2, 3), epsilon=0.001):
     inter = (y_true * y_pred).sum(dim=(0, 1))
     union = (y_true + y_pred - y_true * y_pred).sum(dim=(0, 1))
 
-    iou = ((inter + epsilon) / (union + epsilon)).mean()
+    iou = (inter / (union + epsilon)).mean()
     ious[cls] = iou
     return ious
 
@@ -178,8 +185,10 @@ def make_bbox(file, json_path, target_image, pred_image):
     #
     scale_x = target_res[0] / org_res[0]
     scale_y = target_res[1] / org_res[1]
-    count = 0
+    #
     for i in range(len(json_path)):
+        pred = pred_image.clone()
+        target = target_image.clone()
         polygon = json_path[i]['polygon']
         cls = json_path[i]['class'].lower()
         if cls in except_classes:
@@ -208,14 +217,25 @@ def make_bbox(file, json_path, target_image, pred_image):
                     else:
                         x = CLASSES.index(cls)
                     #
-                    crop_target_image = target_image[:, y_min:y_max:, x_min:x_max]
-                    crop_target_image[crop_target_image != x] = 0
+                    if x == 0:
+                        crop_target_image = target[:, y_min:y_max:, x_min:x_max].clone()
+                        crop_target_image[crop_target_image != x] = 1
+                        #
+                        crop_pred_image = pred[:, y_min:y_max:, x_min:x_max].clone()
+                        crop_pred_image[crop_pred_image != x] = 1
+                        crop_target_image = torch.where(crop_target_image == 0, torch.tensor(1.0), torch.tensor(0.0))
+                        crop_pred_image = torch.where(crop_pred_image == 0, torch.tensor(1.0), torch.tensor(0.0))
+
+                    else:
+                        crop_target_image = target[:, y_min:y_max:, x_min:x_max].clone()
+                        crop_target_image[crop_target_image != x] = 0
+                        #
+                        crop_pred_image = pred[:, y_min:y_max:, x_min:x_max].clone()
+                        crop_pred_image[crop_pred_image != x] = 0
+                        #
+                        crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
+                        crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
                     #
-                    crop_pred_image = pred_image[:, y_min:y_max:, x_min:x_max]
-                    crop_pred_image[crop_pred_image != x] = 0
-                    #
-                    crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
-                    crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
                     org_cls.append(cls)
                     iou = IoU(crop_pred_image, crop_target_image, cls)
                     ious.append(iou)
@@ -234,38 +254,39 @@ def crop_image(target, pred, json_path):
     #
     for i in range(len(json_path)):
         polygon = json_path[i]['polygon']
-        cls = json_path[i]['class']
-        polygon = np.array(polygon, np.int32).reshape(-1, 2)
-        if polygon.size == 0:
+        cls = json_path[i]['class'].lower()
+        if cls in except_classes:
             pass
         else:
-            x_min = np.min(polygon[:, 0]) - 20
-            if x_min < 0:
-                x_min = 0
-            #
-            y_min = np.min(polygon[:, 1]) - 20
-            if y_min < 0:
-                y_min = 0
-            #
-            x_max = np.max(polygon[:, 0]) + 20
-            if x_max > cfg['dataset']['image_size']:
-                x_max = cfg['dataset']['image_size']
-            #
-            y_max = np.max(polygon[:, 1]) + 20
-            if y_max > cfg['dataset']['image_size']:
-                y_max = cfg['dataset']['image_size']
-            #
-            if (x_min == x_max) or (y_min == y_max):
+            polygon = np.array(polygon, np.int32).reshape(-1, 2)
+            if polygon.size == 0:
                 pass
             else:
-                crop_target_image = target[:, y_min:y_max:, x_min:x_max]
-                crop_pred_image = pred[:, y_min:y_max:, x_min:x_max]
-                target_image_list.append(crop_target_image)
-                pred_image_list.append(crop_pred_image)
-                cls_list.append(cls)
+                x_min = np.min(polygon[:, 0]) - 20
+                if x_min < 0:
+                    x_min = 0
+                #
+                y_min = np.min(polygon[:, 1]) - 20
+                if y_min < 0:
+                    y_min = 0
+                #
+                x_max = np.max(polygon[:, 0]) + 20
+                if x_max > cfg['dataset']['image_size']:
+                    x_max = cfg['dataset']['image_size']
+                #
+                y_max = np.max(polygon[:, 1]) + 20
+                if y_max > cfg['dataset']['image_size']:
+                    y_max = cfg['dataset']['image_size']
+                #
+                if (x_min == x_max) or (y_min == y_max):
+                    pass
+                else:
+                    crop_target_image = target[:, y_min:y_max:, x_min:x_max]
+                    crop_pred_image = pred[:, y_min:y_max:, x_min:x_max]
+                    target_image_list.append(crop_target_image)
+                    pred_image_list.append(crop_pred_image)
+                    cls_list.append(cls)
 
-    if len(cls_list) != len(target_image_list):
-        print("error")
 
     return target_image_list, pred_image_list, cls_list
 #------------------------------------------------------------------------------------------------------------------------#
@@ -291,8 +312,7 @@ def pixel_acc_cls(pred, target, cls):
             index = CLASSES.index(c)
             cls_mask = (target == index)
             correct = (pred[cls_mask] == index).sum()
-            total = cls_mask.sum()
-
+            total = cls_mask.sum() + 1e-5
             class_acc.append(correct / total)
 
     return class_acc
@@ -300,22 +320,37 @@ def pixel_acc_cls(pred, target, cls):
 
 
 #-----------------------------------------------------Calculate_precison_recall-------------------------------------------#
-def precision_recall(target, pred):
-    confusion_matrix = torch.zeros((20, 20))
+def precision_recall(target, pred, threshold):
+    y_pred = []
+    y_true = []
+    #
+    precision = {}
+    recall = {}
+    #
+    for i in range(21):
+        if i == 0:
+            y_pred.append(torch.where(pred[i] > threshold, i, 1).clone())
+            y_true.append(torch.where(target[0] == i, i, 1).clone())
+        else:
+            y_pred.append(torch.where(pred[i] > threshold, i, 0).clone())
+            y_true.append(torch.where(target[0] == i, i, 0).clone())
+        #
+        tp = torch.sum((y_pred[i] == i) & (y_true[i] == i))
+        #
+        fp = torch.sum((y_pred[i]== i) & (y_true[i] == 0))
+        #
+        if i == 0:
+            fn = torch.sum((y_pred[i] == 1) & (y_true[i] == i))
+        else:
+            fn = torch.sum((y_pred[i] == 0) & (y_true[i] == i))
 
-    for true_class in range(20):
-        for pred_class in range(20):
-            confusion_matrix[true_class, pred_class] = torch.sum((target == true_class) & (pred == pred_class))
+        precision[CLASSES[i]] = 0.0
+        recall[CLASSES[i]] = 0.0
 
-    precision = np.zeros(20)
-    recall = np.zeros(20)
-
-    for cls in range(20):
-        tp = confusion_matrix[cls, cls]
-        fp = torch.sum(confusion_matrix[:, cls]) - tp
-        fn = torch.sum(confusion_matrix[cls, :]) - tp
-        precision[cls] = tp / (tp + fp + 1e-5)
-        recall[cls] = tp / (tp + fn + 1e-5)
+        if tp + fp > 0:
+            precision[CLASSES[i]] = tp / (tp + fp)
+        if tp + fn > 0:
+            recall[CLASSES[i]] = tp / (tp + fn)
 
 
 

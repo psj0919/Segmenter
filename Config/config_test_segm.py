@@ -12,15 +12,16 @@ def dataset_info(dataset_name= 'vehicledata'):
         test_path = '/storage/sjpark/vehicle_data/Dataset/test_image/'
         test_ann_path = '/storage/sjpark/vehicle_data/Dataset/ann_test/'
         json_file = '/storage/sjpark/vehicle_data/Dataset/val_json/'
+        test_json_file = '/storage/sjpark/vehicle_data/Dataset/test_json/'
         num_class = 21
     else:
         raise NotImplementedError("Not Implemented dataset name")
 
-    return dataset_name, train_path, ann_path, val_path, val_ann_path, test_path, test_ann_path, json_file, num_class
+    return dataset_name, train_path, ann_path, val_path, val_ann_path, test_path, test_ann_path, json_file, test_json_file, num_class
 
 def get_config_dict():
     dataset_name = "vehicledata"
-    name, img_path, ann_path, val_path, val_ann_path, test_path, test_ann_path, json_file, num_class, = dataset_info(dataset_name)
+    name, img_path, ann_path, val_path, val_ann_path, test_path, test_ann_path, json_file, test_json_file, num_class, = dataset_info(dataset_name)
 
     dataset = dict(
         name = name,
@@ -31,6 +32,7 @@ def get_config_dict():
         test_path = test_path,
         test_ann_path = test_ann_path,
         json_file = json_file,
+        test_json = test_json_file,
         num_class = num_class,
         epochs = 200,
         eval_freq =2,
@@ -68,7 +70,7 @@ def get_config_dict():
             distilled= False,
         ),
         resume = '',
-        mode = 'train',
+        mode = 'test',
         save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train/256',
         checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/256'
     )
