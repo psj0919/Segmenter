@@ -5,7 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 
 
-from Config.config_test_segm import get_config_dict
+from Config.config_test import get_config_dict
 
 except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
@@ -158,7 +158,7 @@ def load_json_file(idx):
 #------------------------------------------------------------------------------------------------------------------------#
 
 #------------------------------------------------------calculate_IoU-----------------------------------------------------#
-def IoU(pred, target, cls, thr=0.5, dim=(2, 3), epsilon=1e-5):
+def IoU(pred, target, cls, eps = 1e-5):
     #
     cls = cls.lower()
     #
@@ -166,11 +166,14 @@ def IoU(pred, target, cls, thr=0.5, dim=(2, 3), epsilon=1e-5):
     y_true = target.to(torch.float32)
     y_pred = pred.to(torch.float32)
 
-    inter = (y_true * y_pred).sum(dim=(0, 1))
-    union = (y_true + y_pred - y_true * y_pred).sum(dim=(0, 1))
+    inter = (y_true * y_pred).sum(dim=(1, 2))
+    union = (y_true + y_pred - y_true * y_pred).sum(dim=(1, 2))
 
-    iou = (inter / (union + epsilon)).mean()
+
+    iou = (inter / (union + eps)).mean()
+
     ious[cls] = iou
+
     return ious
 
 def make_bbox(file, json_path, target_image, pred_image):
@@ -236,8 +239,11 @@ def make_bbox(file, json_path, target_image, pred_image):
                         crop_target_image = torch.where(crop_target_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
                         crop_pred_image = torch.where(crop_pred_image >= 1, torch.tensor(1.0), torch.tensor(0.0))
                     #
-                    org_cls.append(cls)
                     iou = IoU(crop_pred_image, crop_target_image, cls)
+                    #
+                    for key, val in iou.items():
+                        org_cls.append(key)
+                    #
                     ious.append(iou)
 
     return ious
@@ -293,7 +299,10 @@ def crop_image(target, pred, json_path):
 
 
 #-----------------------------------------------------Calculate_pixel_Acc------------------------------------------------#
-def pixel_acc_cls(pred, target, cls):
+def pixel_acc_cls(pred, target, json_path, eps = 1e-5):
+    accs = []
+    class_acc = {}
+
     #
     for i in range(len(CLASSES)):
         CLASSES[i] = CLASSES[i].lower()
@@ -301,56 +310,100 @@ def pixel_acc_cls(pred, target, cls):
     for j in range(len(except_classes)):
         except_classes[j] = except_classes[j].lower()
     #
-    for j in range(len(cls)):
-        cls[j] = cls[j].lower()
-    #
-    class_acc = []
-    for c in cls:
-        if c in except_classes:
+    for i in range(len(json_path)):
+        polygon = json_path[i]['polygon']
+        cls = json_path[i]['class'].lower()
+        if cls in except_classes:
             pass
         else:
-            index = CLASSES.index(c)
-            cls_mask = (target == index)
-            correct = (pred[cls_mask] == index).sum()
-            total = cls_mask.sum() + 1e-5
-            class_acc.append(correct / total)
+            polygon = np.array(polygon, np.int32).reshape(-1, 2)
+            if polygon.size == 0:
+                pass
+            else:
+                x_min = np.min(polygon[:, 0])
+                y_min = np.min(polygon[:, 1])
+                x_max = np.max(polygon[:, 0])
+                y_max = np.max(polygon[:, 1])
+            #
+                crop_target_image = target[y_min:y_max:, x_min:x_max].clone()
+                crop_pred_image = pred[y_min:y_max:, x_min:x_max].clone()
+                #
+                index = CLASSES.index(cls)
+                cls_mask = (crop_target_image == index)
+                correct = (crop_pred_image[cls_mask] == index).sum()
+                total = cls_mask.sum()
+                acc = correct / (total + eps)
+                class_acc.setdefault(cls, []).append(acc)
 
     return class_acc
 #------------------------------------------------------------------------------------------------------------------------#
 
 
 #-----------------------------------------------------Calculate_precison_recall-------------------------------------------#
-def precision_recall(target, pred, threshold):
+def precision_recall(target, pred,  json_path, threshold, eps = 1e-5):
     y_pred = []
     y_true = []
     #
     precision = {}
     recall = {}
+    count = 0
+
     #
-    for i in range(21):
-        if i == 0:
-            y_pred.append(torch.where(pred[i] > threshold, i, 1).clone())
-            y_true.append(torch.where(target[0] == i, i, 1).clone())
+    for i in range(len(CLASSES)):
+        CLASSES[i] = CLASSES[i].lower()
+    #
+    for j in range(len(except_classes)):
+        except_classes[j] = except_classes[j].lower()
+    #
+    for i in range(len(json_path)):
+        polygon = json_path[i]['polygon']
+        cls = json_path[i]['class'].lower()
+        if cls in except_classes:
+            pass
         else:
-            y_pred.append(torch.where(pred[i] > threshold, i, 0).clone())
-            y_true.append(torch.where(target[0] == i, i, 0).clone())
-        #
-        tp = torch.sum((y_pred[i] == i) & (y_true[i] == i))
-        #
-        fp = torch.sum((y_pred[i]== i) & (y_true[i] == 0))
-        #
-        if i == 0:
-            fn = torch.sum((y_pred[i] == 1) & (y_true[i] == i))
-        else:
-            fn = torch.sum((y_pred[i] == 0) & (y_true[i] == i))
+            polygon = np.array(polygon, np.int32).reshape(-1, 2)
+            if polygon.size == 0:
+                count = count - 1
+                pass
+            else:
+                x_min = np.min(polygon[:, 0])
+                y_min = np.min(polygon[:, 1])
+                x_max = np.max(polygon[:, 0])
+                y_max = np.max(polygon[:, 1])
+                #
+                crop_target_image = target[:, y_min:y_max:, x_min:x_max].clone()
+                crop_pred_image = pred[:, y_min:y_max:, x_min:x_max].clone()
+                #
+                c = CLASSES.index(cls)
 
-        precision[CLASSES[i]] = 0.0
-        recall[CLASSES[i]] = 0.0
+                if c == 0:
+                    y_pred.append(torch.where(crop_pred_image[0] > threshold, 0, 1).clone())
+                    y_true.append(torch.where(crop_target_image[0] == 1, 0, 1).clone())
+                else:
+                    y_pred.append(torch.where(crop_pred_image[c] > threshold, c, 0).clone())
+                    y_true.append(torch.where(crop_target_image[c] == 1, c, 0).clone())
+                #
 
-        if tp + fp > 0:
-            precision[CLASSES[i]] = tp / (tp + fp)
-        if tp + fn > 0:
-            recall[CLASSES[i]] = tp / (tp + fn)
+                tp = torch.sum(torch.logical_and(y_pred[count] == c, y_true[count] == c))
+                #
+                if c == 0:
+                    fp = torch.sum(torch.logical_and(y_pred[count] == c, y_true[count] == 1))
+                else:
+                    fp = torch.sum(torch.logical_and(y_pred[count] == c, y_true[count] == 0))
+                #
+                if c == 0:
+                    fn = torch.sum(torch.logical_and(y_pred[count] == 1, y_true[count] == c))
+                else:
+                    fn = torch.sum(torch.logical_and(y_pred[count] == 0, y_true[count] == c))
+
+                pre = tp / (tp + fp + eps)
+                rec = tp / (tp + fn + eps)
+
+
+                precision.setdefault(cls, []).append(pre)
+                recall.setdefault(cls, []).append(rec)
+                count = count + 1
+
 
 
 

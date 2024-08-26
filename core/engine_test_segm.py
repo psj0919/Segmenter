@@ -67,89 +67,131 @@ class Trainer():
 
     def test(self):
         self.model.eval()
-        total_ious = []
-        total_accs = {}
-        cls = []
         cls_count = []
+        total_avr_acc = {}
+        total_avr_iou = {}
+        total_avr_precision = {}
+        total_avr_recall = {}
         #
         for i in range(len(CLASSES)):
             CLASSES[i] = CLASSES[i].lower()
-        for c in CLASSES:
-            if c in except_classes:
-                pass
-            else:
-                total_accs[c] = []
         #
-        for curr_epoch in range(self.cfg['args']['epochs']):
-            for iter, (data, target, label, idx) in enumerate(self.test_loader):
-                self.global_step += 1
+        for iter, (data, target, label, idx) in enumerate(self.test_loader):
+            cls = []
+            total_ious = []
+            total_accs = {}
+            avr_precision = {}
+            avr_recall = {}
+            #
+            self.global_step += 1
+            #
+            data = data.to(self.device)
+            target = target.to(self.device)
+            label = label.to(self.device)
+
+            logits = self.model(data)
+            pred = logits.softmax(dim=1).argmax(dim=1).to('cpu')
+            pred_ = pred.to(self.device)
+            pred_softmax = logits.softmax(dim=1)
+            target_ = target.softmax(dim=1).argmax(dim=1).to('cpu')
+            file, json_path = load_json_file(int(idx))
+            # Iou
+            iou = make_bbox(file, json_path, target_, pred)
+            # Crop image
+            target_crop_image, pred_crop_image, org_cls = crop_image(target[0], logits[0], json_path)
+
+            for i in range(len(iou)):
+                for key, val in iou[i].items():
+                    if key in cls:
+                        a = cls.index(key)
+                        total_ious[a] += val
+                        cls_count[a] += 1
+                    else:
+                        cls.append(key)
+                        total_ious.append(val)
+                        cls_count.append(1)
+
+            avr_ious = [total / count for total, count in zip(total_ious, cls_count)]
+            for i in range(len(avr_ious)):
+                total_avr_iou.setdefault(cls[i], []).append(avr_ious[i])
+            cls_count.clear()
+
+            # Pixel Acc
+
+            x = pixel_acc_cls(pred[0].cpu(), label[0].cpu(), json_path)
+            for key, val in x.items():
+                if len(val) > 1:
+                    total_accs[key] = sum(val) / len(val)
+                    c = CLASSES.index(key)
+                    total_avr_acc.setdefault(key, []).append(sum(val) / len(val))
+                else:
+                    total_accs[key] = val[0]
+                    c = CLASSES.index(key)
+                    total_avr_acc.setdefault(key, []).append(val[0])
+            #
+            precision, recall = precision_recall(target[0], pred_softmax[0], json_path, threshold = 0.5)
+            for key, val in precision.items():
+                if len(val) > 1:
+                    avr_precision[key] = sum(val) / len(val)
+                    c = CLASSES.index(key)
+                    total_avr_precision.setdefault(key, []).append(sum(val) / len(val))
+                else:
+                    avr_precision[key] = val[0]
+                    c = CLASSES.index(key)
+                    total_avr_precision.setdefault(key, []).append(val[0])
+            #
+            for key, val in recall.items():
+                if len(val) > 1:
+                    avr_recall[key] = sum(val) / len(val)
+                    c = CLASSES.index(key)
+                    total_avr_recall.setdefault(key, []).append(sum(val) / len(val))
+                else:
+                    avr_recall[key] = val[0]
+                    c = CLASSES.index(key)
+                    total_avr_recall.setdefault(key, []).append(val[0])
+
+            if self.global_step % 10 == 0:
                 #
-                data = data.to(self.device)
-                target = target.to(self.device)
-                label = label.to(self.device)
+                for i in range(len(avr_ious)):
+                    self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step = self.global_step)
 
-                logits = self.model(data)
-                pred = logits.softmax(dim=1).argmax(dim=1).to('cpu')
-                pred_ = pred.to(self.device)
-                pred_softmax = logits.softmax(dim=1)
-                target_ = target.softmax(dim=1).argmax(dim=1).to('cpu')
-                file, json_path = load_json_file(int(idx))
-                # Iou
-                iou = make_bbox(file, json_path, target_, pred)
-                # Crop image
-                target_crop_image, pred_crop_image, org_cls = crop_image(target[0], logits[0], json_path)
-
-                for i in range(len(iou)):
-                    for key, val in iou[i].items():
-                        if key in cls:
-                            a = cls.index(key)
-                            total_ious[a] += val
-                            cls_count[a] += 1
-                        else:
-                            cls.append(key)
-                            total_ious.append(val)
-                            cls_count.append(1)
-
-                avr_ious = [total / count for total, count in zip(total_ious, cls_count)]
-
+                # Crop Image
+                for i in range(len(target_crop_image)):
+                    self.writer.add_image('target /' + org_cls[i], trg_to_class_rgb(target_crop_image[i], org_cls[i]),
+                                          dataformats='HWC', global_step=self.global_step)
+                    self.writer.add_image('pred /' + org_cls[i], pred_to_class_rgb(pred_crop_image[i], org_cls[i]),
+                                          dataformats='HWC', global_step=self.global_step)
                 # Pixel Acc
-                for p, t in zip(pred, label):
-                    x = pixel_acc_cls(p.cpu(), t.cpu(), cls)
+                for i in range(len(cls)):
+                    self.writer.add_scalar(tag='pixel_accs/{}'.format(cls[i]), scalar_value=total_accs[cls[i]], global_step=self.global_step)
+
+                # precision & recall
+                for i in range(len(cls)):
+                    self.writer.add_scalar(tag='precision/{}'.format(cls[i]), scalar_value=avr_precision[cls[i]], global_step=self.global_step)
+                for i in range(len(cls)):
+                    self.writer.add_scalar(tag='recall/{}'.format(cls[i]), scalar_value=avr_recall[cls[i]], global_step=self.global_step)
+
                 #
-                for idx, c in enumerate(cls):
-                    total_accs[c].append(x[idx])
+                self.writer.add_image('train/predict_image',
+                                      pred_to_rgb(logits[0]),
+                                      dataformats='HWC', global_step=self.global_step)
                 #
-                precision, recall = precision_recall(label, pred_softmax[0], threshold = 0.5)
-
-                if self.global_step % 3 == 0:
-                    #
-                    for i in range(len(avr_ious)):
-                        self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step = self.global_step)
-
-                    # Crop Image
-                    for i in range(len(target_crop_image)):
-                        self.writer.add_image('target /' + org_cls[i], trg_to_class_rgb(target_crop_image[i], org_cls[i]),
-                                              dataformats='HWC', global_step=self.global_step)
-                        self.writer.add_image('pred /' + org_cls[i], pred_to_class_rgb(pred_crop_image[i], org_cls[i]),
-                                              dataformats='HWC', global_step=self.global_step)
-                    # Pixel Acc
-                    for i in range(len(cls)):
-                        self.writer.add_scalar(tag='pixel_accs/{}'.format(cls[i]), scalar_value=np.mean(total_accs[cls[i]]), global_step=self.global_step)
-
-                    # precision & recall
-                    for i in range(len(CLASSES)):
-                        self.writer.add_scalar(tag='precision/{}'.format(CLASSES[i]), scalar_value=precision[CLASSES[i]], global_step=self.global_step)
-                    for i in range(len(cls)):
-                        self.writer.add_scalar(tag='recall/{}'.format(CLASSES[i]), scalar_value=recall[CLASSES[i]], global_step=self.global_step)
-
-                    #
-                    self.writer.add_image('train/predict_image',
-                                          pred_to_rgb(logits[0]),
-                                          dataformats='HWC', global_step=self.global_step)
-                    #
-                    self.writer.add_image('train/target_image',
-                                          trg_to_rgb(target[0]),
-                                          dataformats='HWC', global_step=self.global_step)
+                self.writer.add_image('train/target_image',
+                                      trg_to_rgb(target[0]),
+                                      dataformats='HWC', global_step=self.global_step)
+        #
+        for key ,val in total_avr_iou.items():
+            self.writer.add_scalar(tag='total_average_ious/{}'.format(key), scalar_value=sum(val) / len(val),
+                                   global_step=1)
+        for key, val in total_avr_acc.items():
+            self.writer.add_scalar(tag='total_average_acc/{}'.format(key), scalar_value=sum(val) / len(val),
+                                   global_step=1)
+        for key, val in total_avr_precision.items():
+            self.writer.add_scalar(tag='total_average_precision/{}'.format(key), scalar_value=sum(val) / len(val),
+                                   global_step=1)
+        for key, val in total_avr_recall.items():
+            self.writer.add_scalar(tag='total_average_recall/{}'.format(key), scalar_value=sum(val) / len(val),
+                                   global_step=1)
 
 
 
