@@ -42,7 +42,7 @@ def get_config_dict():
         window_stride= 512
     )
     args = dict(
-        gpu_id='0',
+        gpu_id='1',
         num_workers = 3
     )
     solver = dict(
@@ -69,9 +69,9 @@ def get_config_dict():
             n_cls= num_class,
             distilled= False,
         ),
-        resume = '',
+        resume = '/storage/sjpark/vehicle_data/checkpoints/segm/256/Segmenter_epochs:200_optimizer:adam_lr:0.0001_model vit_base_patch8_384.pth',
         mode = 'test',
-        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train/256',
+        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/test/256',
         checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/256'
     )
 
