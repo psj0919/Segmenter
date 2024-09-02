@@ -184,7 +184,7 @@ def make_bbox(file, json_path, target_image, pred_image):
         CLASSES[i] = CLASSES[i].lower()
     #
     org_res = (1920, 1080)
-    target_res = cfg['dataset']['size']
+    target_res = cfg['model']['backbone']['image_size']
     #
     scale_x = target_res[0] / org_res[0]
     scale_y = target_res[1] / org_res[1]

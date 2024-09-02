@@ -80,7 +80,7 @@ class Trainer():
     def get_dataloader(self):
         if self.cfg['dataset']['name'] == 'vehicledata':
             dataset = vehicledata(self.cfg['dataset']['img_path'], self.cfg['dataset']['ann_path'],
-                                  self.cfg['dataset']['num_class'])
+                                  self.cfg['dataset']['num_class'], self.cfg['model']['backbone']['image_size'])
         else:
             raise ValueError("Invalid dataset name...")
         loader = torch.utils.data.DataLoader(dataset, batch_size=self.cfg['dataset']['batch_size'], shuffle=True,
@@ -91,7 +91,7 @@ class Trainer():
     def get_val_dataloader(self):
         if self.cfg['dataset']['name'] == 'vehicledata':
             val = vehicledata(self.cfg['dataset']['val_path'], self.cfg['dataset']['val_ann_path'],
-                                      self.cfg['dataset']['num_class'])
+                                      self.cfg['dataset']['num_class'], self.cfg['model']['backbone']['image_size'])
         else:
             raise ValueError("Invalid dataset name..")
 
@@ -147,8 +147,6 @@ class Trainer():
     def training(self):
         print("-----strat training-----")
         self.model.train()
-        num_updates = self.cfg['dataset']['epochs'] * len(self.train_loader)
-
         for curr_epoch in range(self.cfg['dataset']['epochs']):
             if (curr_epoch + 1) % 3 == 0:
                 avr_ious, pixel_accs, cls, org_cls, target_crop_image, pred_crop_image, precision, recall = self.validation()
@@ -206,8 +204,6 @@ class Trainer():
                                           dataformats='HWC', global_step=self.global_step)
             print("Complete {}_epoch".format(curr_epoch))
 
-            # num_updates += 1
-            # self.scheduler.step_update(num_updates=num_updates)
             self.scheduler.step()
 
             self.writer.add_scalar(tag='train/lr', scalar_value=self.optimizer.param_groups[0]['lr'],

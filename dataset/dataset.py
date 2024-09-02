@@ -23,14 +23,14 @@ class vehicledata():
         'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
     )
 
-    def __init__(self, image_path, annotation_path, n_class, transform=None):
+    def __init__(self, image_path, annotation_path, n_class, size, transform=None):
         self.image_path = image_path
         self.train_dir = sorted(os.listdir(self.image_path))
         #
         self.annotation_path = annotation_path
         self.ann_file = sorted(os.listdir(self.annotation_path))
         #
-        self.size = (256, 256)
+        self.size = size
         self.n_class = n_class
 
     def __len__(self):

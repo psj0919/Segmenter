@@ -38,7 +38,7 @@ def get_config_dict():
         image_size= 512,
     )
     args = dict(
-        gpu_id='0',
+        gpu_id='1',
         num_workers = 3
     )
     solver = dict(
@@ -56,9 +56,9 @@ def get_config_dict():
         backbone = dict(
             name= " vit_base_patch8_384",
             image_size= (512, 512),
-            patch_size= 8,
+            patch_size= 16,
             d_model= 768,
-            n_heads= 12,
+            n_heads= 8,
             n_layers= 12,
             d_ff = 0,
             normalization= "vit",
