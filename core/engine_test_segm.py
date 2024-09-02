@@ -55,7 +55,7 @@ class Trainer():
                                   self.cfg['dataset']['num_class'])
         else:
             raise ValueError("Invalid dataset name...")
-        loader = torch.utils.data.DataLoader(dataset, batch_size=self.cfg['dataset']['batch_size'], shuffle=True,
+        loader = torch.utils.data.DataLoader(dataset, batch_size=self.cfg['dataset']['batch_size'], shuffle=False,
                                              num_workers=self.cfg['args']['num_workers'])
 
         return loader

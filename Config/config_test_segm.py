@@ -36,7 +36,7 @@ def get_config_dict():
         num_class = num_class,
         epochs = 200,
         eval_freq =2,
-        batch_size = 8,
+        batch_size = 1,
         image_size= 256,
         crop_size= 512,
         window_stride= 512

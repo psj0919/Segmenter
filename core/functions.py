@@ -5,7 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 
 
-from Config.config_test_segm import get_config_dict
+from Config.config_test import get_config_dict
 
 except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
@@ -409,3 +409,215 @@ def precision_recall(target, pred,  json_path, threshold, eps = 1e-5):
 
     return precision, recall
 #------------------------------------------------------------------------------------------------------------------------#
+def get_precision(target, pred, json_path, threshold, eps=1e-5):
+    y_pred = []
+    y_true = []
+    #
+    precision = {}
+    count = 0
+
+    #
+    for i in range(len(CLASSES)):
+        CLASSES[i] = CLASSES[i].lower()
+    #
+    for j in range(len(except_classes)):
+        except_classes[j] = except_classes[j].lower()
+    #
+    for i in range(len(json_path)):
+        polygon = json_path[i]['polygon']
+        cls = json_path[i]['class'].lower()
+        if cls in except_classes:
+            pass
+        else:
+            polygon = np.array(polygon, np.int32).reshape(-1, 2)
+            if polygon.size == 0:
+                count = count - 1
+                pass
+            else:
+                x_min = np.min(polygon[:, 0])
+                y_min = np.min(polygon[:, 1])
+                x_max = np.max(polygon[:, 0])
+                y_max = np.max(polygon[:, 1])
+                #
+                crop_target_image = target[:, y_min:y_max:, x_min:x_max].clone()
+                crop_pred_image = pred[:, y_min:y_max:, x_min:x_max].clone()
+                #
+                c = CLASSES.index(cls)
+
+                if c == 0:
+                    y_pred.append(torch.where(crop_pred_image[0] > threshold, 0, 1).clone())
+                    y_true.append(torch.where(crop_target_image[0] == 1, 0, 1).clone())
+                else:
+                    y_pred.append(torch.where(crop_pred_image[c] > threshold, c, 0).clone())
+                    y_true.append(torch.where(crop_target_image[c] == 1, c, 0).clone())
+                #
+
+                tp = torch.sum(torch.logical_and(y_pred[count] == c, y_true[count] == c))
+                #
+                if c == 0:
+                    fp = torch.sum(torch.logical_and(y_pred[count] == c, y_true[count] == 1))
+                else:
+                    fp = torch.sum(torch.logical_and(y_pred[count] == c, y_true[count] == 0))
+
+                pre = tp / (tp + fp + eps)
+
+                precision.setdefault(cls, []).append(pre)
+                count = count + 1
+
+
+    for key, val in precision.items():
+        if len(val) > 1:
+            precision[key] = sum(val) / len(val)
+        else:
+            precision[key] = val[0]
+
+    return precision
+
+
+def get_recall(target, pred, json_path, threshold, eps=1e-5):
+    y_pred = []
+    y_true = []
+    #
+    recall = {}
+    count = 0
+
+    #
+    for i in range(len(CLASSES)):
+        CLASSES[i] = CLASSES[i].lower()
+    #
+    for j in range(len(except_classes)):
+        except_classes[j] = except_classes[j].lower()
+    #
+    for i in range(len(json_path)):
+        polygon = json_path[i]['polygon']
+        cls = json_path[i]['class'].lower()
+        if cls in except_classes:
+            pass
+        else:
+            polygon = np.array(polygon, np.int32).reshape(-1, 2)
+            if polygon.size == 0:
+                count = count - 1
+                pass
+            else:
+                x_min = np.min(polygon[:, 0])
+                y_min = np.min(polygon[:, 1])
+                x_max = np.max(polygon[:, 0])
+                y_max = np.max(polygon[:, 1])
+                #
+                crop_target_image = target[:, y_min:y_max:, x_min:x_max].clone()
+                crop_pred_image = pred[:, y_min:y_max:, x_min:x_max].clone()
+                #
+                c = CLASSES.index(cls)
+
+                if c == 0:
+                    y_pred.append(torch.where(crop_pred_image[0] > threshold, 0, 1).clone())
+                    y_true.append(torch.where(crop_target_image[0] == 1, 0, 1).clone())
+                else:
+                    y_pred.append(torch.where(crop_pred_image[c] > threshold, c, 0).clone())
+                    y_true.append(torch.where(crop_target_image[c] == 1, c, 0).clone())
+                #
+                tp = torch.sum(torch.logical_and(y_pred[count] == c, y_true[count] == c))
+                #
+                if c == 0:
+                    fn = torch.sum(torch.logical_and(y_pred[count] == 1, y_true[count] == c))
+                else:
+                    fn = torch.sum(torch.logical_and(y_pred[count] == 0, y_true[count] == c))
+
+                rec = tp / (tp + fn + eps)
+
+                recall.setdefault(cls, []).append(rec)
+                count = count + 1
+
+    for key, val in recall.items():
+        if len(val) > 1:
+            recall[key] = sum(val) / len(val)
+        else:
+            recall[key] = val[0]
+
+    return recall
+
+#--------------------------------------------precision-recall curve------------------------------------------------------#
+
+def precision_recall_curve(target, pred,  json_path, cls, idx):
+    theshold = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
+    precision = []
+    recall = []
+    x = {}
+    y = {}
+    #
+    for i in theshold:
+        precision.append(get_precision(target, pred, json_path, i))
+        recall.append(get_recall(target, pred, json_path, i))
+    #
+    for i in range(len(cls)):
+        for j in range(len(precision)):
+            y.setdefault(cls[i], []).append(precision[j][cls[i]].cpu())
+            x.setdefault(cls[i], []).append(recall[j][cls[i]].cpu())
+
+    for i in range(len(cls)):
+        fig = plt.figure(figsize=(9, 6))
+        plt.plot(x[i][cls], y[i][cls])
+        plt.scatter(x[i][cls], y[i][cls])
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision-Recall curve')
+        plt.savefig('/storage/sjpark/vehicle_data/curve/FCN/FCN8s/512/{}/{}'.format(cls[i], cls[i] + '_' + str(int(idx))) +'.png')
+
+        plt.close()
+
+
+def class_per_histogram(acc, iou, precision, recall):
+    accs = []
+    ious = []
+    precisions = []
+    recalls = []
+    cls = []
+    for key, val in acc.items():
+        cls.append(key)
+
+    for i in range(len(cls)):
+        accs.append(acc[cls[i]])
+        plt.figure()
+        plt.hist(accs, label=cls[i] + '_acc')
+        plt.legend()
+        plt.savefig('/storage/sjpark/vehicle_data/histogram/FCN/FCN8s/512/{}/{}'.format(cls[i], cls[i] + '_Pixel_Accuracy'))
+        plt.close()
+        accs.clear()
+    #
+    for i in range(len(cls)):
+        ious.append(iou[cls[i]])
+        plt.figure()
+        plt.hist(ious, label=cls[i] + '_IoU')
+        plt.legend()
+        plt.savefig('/storage/sjpark/vehicle_data/histogram/FCN/FCN8s/512/{}/{}'.format(cls[i], cls[i] + '_IoUS'))
+        plt.close()
+        ious.clear()
+
+    for i in range(len(cls)):
+        precisions.append(precision[cls[i]])
+        plt.figure()
+        plt.hist(precisions, label=cls[i] + '_Precision')
+        plt.legend()
+        plt.savefig('/storage/sjpark/vehicle_data/histogram/FCN/FCN8s/512/{}/{}'.format(cls[i], cls[i] + '_Precision'))
+        plt.close()
+        precisions.clear()
+    #
+    for i in range(len(cls)):
+        recalls.append(recall[cls[i]])
+        plt.figure()
+        plt.hist(recalls, label=cls[i] + '_Recall')
+        plt.legend()
+        plt.savefig('/storage/sjpark/vehicle_data/histogram/FCN/FCN8s/512/{}/{}'.format(cls[i], cls[i] + '_Recall'))
+        plt.close()
+        recalls.clear()
+
+
+
+
+
+
+
+
+
+
+
