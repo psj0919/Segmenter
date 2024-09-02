@@ -5,7 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 
 
-from Config.config_test import get_config_dict
+from Config.config_test_segm import get_config_dict
 
 except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 

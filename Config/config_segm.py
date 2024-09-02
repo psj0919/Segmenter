@@ -33,11 +33,9 @@ def get_config_dict():
         json_file = json_file,
         num_class = num_class,
         epochs = 200,
-        eval_freq =2,
+        eval_freq =4,
         batch_size = 8,
-        image_size= 256,
-        crop_size= 512,
-        window_stride= 512
+        image_size= 512,
     )
     args = dict(
         gpu_id='0',
@@ -57,11 +55,11 @@ def get_config_dict():
     model = dict(
         backbone = dict(
             name= " vit_base_patch8_384",
-            image_size= (256, 256),
+            image_size= (512, 512),
             patch_size= 8,
             d_model= 768,
-            n_heads= 8,
-            n_layers= 6,
+            n_heads= 12,
+            n_layers= 12,
             d_ff = 0,
             normalization= "vit",
             n_cls= num_class,
@@ -69,8 +67,8 @@ def get_config_dict():
         ),
         resume = '',
         mode = 'train',
-        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train/256',
-        checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/256'
+        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train/512',
+        checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/512'
     )
 
     decoder = dict(
