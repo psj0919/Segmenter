@@ -5,7 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 
 
-from Config.config_test_segm import get_config_dict
+from Config.config_segm import get_config_dict
 
 except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
@@ -16,8 +16,11 @@ CLASSES = [
     'rubberCone', 'trafficSign', 'warningTriangle', 'fence']
 
 cfg = get_config_dict()
-
-
+if cfg['model']['mode'] == 'train':
+    pass
+else:
+    from Config.config_test_segm import get_test_config_dict
+    cfg = get_test_config_dict()
 
 
 #------------------------------------------- make_image-rgb--------------------------------------------------------------#

@@ -19,7 +19,7 @@ def dataset_info(dataset_name= 'vehicledata'):
 
     return dataset_name, train_path, ann_path, val_path, val_ann_path, test_path, test_ann_path, json_file, test_json_file, num_class
 
-def get_config_dict():
+def get_test_config_dict():
     dataset_name = "vehicledata"
     name, img_path, ann_path, val_path, val_ann_path, test_path, test_ann_path, json_file, test_json_file, num_class, = dataset_info(dataset_name)
 

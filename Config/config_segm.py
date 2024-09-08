@@ -38,7 +38,7 @@ def get_config_dict():
         image_size= 512,
     )
     args = dict(
-        gpu_id='1',
+        gpu_id='0',
         num_workers = 3
     )
     solver = dict(
@@ -59,7 +59,7 @@ def get_config_dict():
             patch_size= 16,
             d_model= 768,
             n_heads= 8,
-            n_layers= 12,
+            n_layers= 10,
             d_ff = 0,
             normalization= "vit",
             n_cls= num_class,

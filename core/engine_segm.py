@@ -15,7 +15,7 @@ from timm import optim
 from optim.scheduler import PolynomiaLR
 from torch.utils.tensorboard import SummaryWriter
 
-except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight', 'background']
+except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
 CLASSES = [
     'background', 'vehicle', 'bus', 'truck', 'policeCar', 'ambulance', 'schoolBus', 'otherCar',
@@ -149,27 +149,26 @@ class Trainer():
         self.model.train()
         for curr_epoch in range(self.cfg['dataset']['epochs']):
             if (curr_epoch + 1) % 3 == 0:
-                avr_ious, pixel_accs, cls, org_cls, target_crop_image, pred_crop_image, precision, recall = self.validation()
+                avr_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, avr_precision, avr_recall = self.validation()
 
-                # Iou
                 for i in range(len(avr_ious)):
                     self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step = self.global_step)
 
                 # Crop Image
                 for i in range(len(target_crop_image)):
                     self.writer.add_image('target /' + org_cls[i], trg_to_class_rgb(target_crop_image[i], org_cls[i]),
-                                          dataformats='HWC', global_step=1)
+                                          dataformats='HWC', global_step=self.global_step)
                     self.writer.add_image('pred /' + org_cls[i], pred_to_class_rgb(pred_crop_image[i], org_cls[i]),
-                                          dataformats='HWC', global_step=1)
+                                          dataformats='HWC', global_step=self.global_step)
                 # Pixel Acc
                 for i in range(len(cls)):
-                    self.writer.add_scalar(tag='pixel_accs/{}'.format(cls[i]), scalar_value=np.mean(pixel_accs[cls[i]]), global_step=self.global_step)
+                    self.writer.add_scalar(tag='pixel_accs/{}'.format(cls[i]), scalar_value=total_accs[cls[i]], global_step=self.global_step)
 
                 # precision & recall
-                for i in range(20):
-                    self.writer.add_scalar(tag='precision & recall/{}'.format(CLASSES[i]), scalar_value=precision[i], global_step=self.global_step)
-                for i in range(20):
-                    self.writer.add_scalar(tag='precision & recall/{}'.format(CLASSES[i]), scalar_value=recall[i], global_step=self.global_step)
+                for i in range(len(cls)):
+                    self.writer.add_scalar(tag='precision/{}'.format(cls[i]), scalar_value=avr_precision[cls[i]], global_step=self.global_step)
+                for i in range(len(cls)):
+                    self.writer.add_scalar(tag='recall/{}'.format(cls[i]), scalar_value=avr_recall[cls[i]], global_step=self.global_step)
 
             #
             for batch_idx, (data, target, label, index) in (enumerate(self.train_loader)):
@@ -229,6 +228,14 @@ class Trainer():
                 total_accs[c] = []
         #
         for iter, (data, target, label, idx) in enumerate(self.val_loader):
+            cls = []
+            total_ious = []
+            total_accs = {}
+            avr_precision = {}
+            avr_recall = {}
+            #
+            self.global_step += 1
+            #
             data = data.to(self.device)
             target = target.to(self.device)
             label = label.to(self.device)
@@ -236,6 +243,7 @@ class Trainer():
             logits = self.model(data)
             pred = logits.softmax(dim=1).argmax(dim=1).to('cpu')
             pred_ = pred.to(self.device)
+            pred_softmax = logits.softmax(dim=1)
             target_ = target.softmax(dim=1).argmax(dim=1).to('cpu')
             file, json_path = load_json_file(int(idx))
             # Iou
@@ -255,18 +263,44 @@ class Trainer():
                         cls_count.append(1)
 
             avr_ious = [total / count for total, count in zip(total_ious, cls_count)]
+            cls_count.clear()
 
             # Pixel Acc
-            for p, t in zip(pred, label):
-                x = pixel_acc_cls(p.cpu(), t.cpu(), cls)
 
-            for idx, c in enumerate(cls):
-                total_accs[c].append(x[idx])
-            precision, recall = precision_recall(label, pred_)
+            x = pixel_acc_cls(pred[0].cpu(), label[0].cpu(), json_path)
+            for key, val in x.items():
+                if len(val) > 1:
+                    total_accs[key] = sum(val) / len(val)
+                    c = CLASSES.index(key)
+
+                else:
+                    total_accs[key] = val[0]
+                    c = CLASSES.index(key)
+
+            #
+            precision, recall = precision_recall(target[0], pred_softmax[0], json_path, threshold=0.5)
+            for key, val in precision.items():
+                if len(val) > 1:
+                    avr_precision[key] = sum(val) / len(val)
+                    c = CLASSES.index(key)
+
+                else:
+                    avr_precision[key] = val[0]
+                    c = CLASSES.index(key)
+
+            #
+            for key, val in recall.items():
+                if len(val) > 1:
+                    avr_recall[key] = sum(val) / len(val)
+                    c = CLASSES.index(key)
+
+                else:
+                    avr_recall[key] = val[0]
+                    c = CLASSES.index(key)
 
         self.model.train()
+        return avr_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, avr_precision, avr_recall
 
-        return avr_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, precision, recall
 
 
     def save_model(self, save_path):
