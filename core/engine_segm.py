@@ -304,7 +304,8 @@ class Trainer():
 
 
     def save_model(self, save_path):
-        save_file = 'Segmenter_epochs:{}_optimizer:{}_lr:{}_model{}.pth'.format(self.cfg['dataset']['epochs'],
+        save_file = 'Segmenter_{}_epochs:{}_optimizer:{}_lr:{}_model{}.pth'.format(self.cfg['dataset']['network_name'],
+                                                                          self.cfg['dataset']['epochs'],
                                                                           self.cfg['solver']['optimizer'],
                                                                           self.cfg['solver']['lr'],
                                                                           self.cfg['model']['backbone']['name'])
