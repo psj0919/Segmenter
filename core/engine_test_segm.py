@@ -96,7 +96,7 @@ class Trainer():
             target_ = target.softmax(dim=1).argmax(dim=1).to('cpu')
             file, json_path = load_json_file(int(idx))
             # Iou
-            iou = make_bbox(file, json_path, target_, pred)
+            iou = make_bbox(json_path, target_, pred)
             # Crop image
             target_crop_image, pred_crop_image, org_cls = crop_image(target[0], logits[0], json_path)
 
