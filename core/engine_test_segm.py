@@ -34,7 +34,7 @@ class Trainer():
         self.save_path = self.cfg['model']['save_dir']
         self.writer = SummaryWriter(log_dir = self.save_path)
         self.global_step = 0
-
+        self.load_weight()
 
     def setup_device(self):
         if self.cfg['args']['gpu_id'] is not None:
@@ -51,8 +51,8 @@ class Trainer():
 
     def get_test_dataloader(self):
         if self.cfg['dataset']['name'] == 'vehicledata':
-            dataset = vehicledata(self.cfg['dataset']['img_path'], self.cfg['dataset']['ann_path'],
-                                  self.cfg['dataset']['num_class'])
+            dataset = vehicledata(self.cfg['dataset']['test_path'], self.cfg['dataset']['test_ann_path'],
+                                  self.cfg['dataset']['num_class'], self.cfg['model']['backbone']['image_size'])
         else:
             raise ValueError("Invalid dataset name...")
         loader = torch.utils.data.DataLoader(dataset, batch_size=self.cfg['dataset']['batch_size'], shuffle=False,
@@ -65,8 +65,24 @@ class Trainer():
 
         return model.to(self.device)
 
+    def load_weight(self):
+        if self.cfg['model']['mode'] == 'train':
+            pass
+        elif self.cfg['model']['mode'] == 'test':
+            file_path = self.cfg['model']['resume']
+            assert os.path.exists(file_path), f'There is no checkpoints file!'
+            print("Loading saved weighted {}".format(file_path))
+            ckpt = torch.load(file_path, map_location=self.device)
+            resume_state_dict = ckpt['model'].state_dict()
+
+            self.model.load_state_dict(resume_state_dict, strict=True)  # load weights
+        else:
+            raise NotImplementedError("Not Implemented {}".format(self.cfg['dataset']['mode']))
+
+
     def test(self):
         self.model.eval()
+        print("-----start testing_{}-----".format(self.cfg['dataset']['network_name']))
         cls_count = []
         total_avr_acc = {}
         total_avr_iou = {}
@@ -82,6 +98,7 @@ class Trainer():
             total_accs = {}
             avr_precision = {}
             avr_recall = {}
+            p_threshold = [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]
             #
             self.global_step += 1
             #
@@ -117,8 +134,8 @@ class Trainer():
             cls_count.clear()
 
             # Pixel Acc
-
             x = pixel_acc_cls(pred[0].cpu(), label[0].cpu(), json_path)
+
             for key, val in x.items():
                 if len(val) > 1:
                     total_accs[key] = sum(val) / len(val)
@@ -128,34 +145,33 @@ class Trainer():
                     total_accs[key] = val[0]
                     c = CLASSES.index(key)
                     total_avr_acc.setdefault(key, []).append(val[0])
+
             #
-            precision, recall = precision_recall(target[0], pred_softmax[0], json_path, threshold = 0.5)
+            precision, recall = precision_recall(target[0], pred_softmax[0], json_path, threshold = p_threshold)
             for key, val in precision.items():
-                if len(val) > 1:
-                    avr_precision[key] = sum(val) / len(val)
-                    c = CLASSES.index(key)
-                    total_avr_precision.setdefault(key, []).append(sum(val) / len(val))
-                else:
-                    avr_precision[key] = val[0]
-                    c = CLASSES.index(key)
-                    total_avr_precision.setdefault(key, []).append(val[0])
+                for key2, val2 in val.items():
+                    if key == 0.5:
+                        if len(val2) > 1:
+                            avr_precision[key2] = sum(val2) / len(val2)
+                        else:
+                            avr_precision[key2] = val2[0]
+                    total_avr_precision.setdefault(key2, {}).setdefault(key, []).append(val2[0].cpu())
             #
             for key, val in recall.items():
-                if len(val) > 1:
-                    avr_recall[key] = sum(val) / len(val)
-                    c = CLASSES.index(key)
-                    total_avr_recall.setdefault(key, []).append(sum(val) / len(val))
-                else:
-                    avr_recall[key] = val[0]
-                    c = CLASSES.index(key)
-                    total_avr_recall.setdefault(key, []).append(val[0])
+                for key2, val2 in val.items():
+                    if key == 0.5:
+                        if len(val2) > 1:
+                            avr_recall[key2] = sum(val2) / len(val2)
+                        else:
+                            avr_recall[key2] = val2[0]
+                    total_avr_recall.setdefault(key2, {}).setdefault(key, []).append(val2[0].cpu())
+
 
             if self.global_step % 10 == 0:
                 #
                 for i in range(len(avr_ious)):
                     self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step = self.global_step)
-
-                # Crop Image
+                #Crop Image
                 for i in range(len(target_crop_image)):
                     self.writer.add_image('target /' + org_cls[i], trg_to_class_rgb(target_crop_image[i], org_cls[i]),
                                           dataformats='HWC', global_step=self.global_step)
@@ -165,13 +181,8 @@ class Trainer():
                 for i in range(len(cls)):
                     self.writer.add_scalar(tag='pixel_accs/{}'.format(cls[i]), scalar_value=total_accs[cls[i]], global_step=self.global_step)
 
-                # precision & recall
-                for i in range(len(cls)):
-                    self.writer.add_scalar(tag='precision/{}'.format(cls[i]), scalar_value=avr_precision[cls[i]], global_step=self.global_step)
-                for i in range(len(cls)):
-                    self.writer.add_scalar(tag='recall/{}'.format(cls[i]), scalar_value=avr_recall[cls[i]], global_step=self.global_step)
 
-                #
+
                 self.writer.add_image('train/predict_image',
                                       pred_to_rgb(logits[0]),
                                       dataformats='HWC', global_step=self.global_step)
@@ -179,22 +190,26 @@ class Trainer():
                 self.writer.add_image('train/target_image',
                                       trg_to_rgb(target[0]),
                                       dataformats='HWC', global_step=self.global_step)
-        #
+
+
+        # class_per_histogram(total_avr_acc, total_avr_iou, total_avr_precision, total_avr_recall)
+
         for key ,val in total_avr_iou.items():
             self.writer.add_scalar(tag='total_average_ious/{}'.format(key), scalar_value=sum(val) / len(val),
                                    global_step=1)
         for key, val in total_avr_acc.items():
             self.writer.add_scalar(tag='total_average_acc/{}'.format(key), scalar_value=sum(val) / len(val),
                                    global_step=1)
+
         for key, val in total_avr_precision.items():
-            self.writer.add_scalar(tag='total_average_precision/{}'.format(key), scalar_value=sum(val) / len(val),
-                                   global_step=1)
+            for key2, val2 in val.items():
+                path = "/storage/sjpark/vehicle_data/precision_recall_per_class_p_threshold/{}/256/precision/{}/{}_{}.txt".format(self.cfg['dataset']['network_name'],key, key, key2)
+                np.savetxt(path, total_avr_precision[key][key2], fmt= '%f')
+
         for key, val in total_avr_recall.items():
-            self.writer.add_scalar(tag='total_average_recall/{}'.format(key), scalar_value=sum(val) / len(val),
-                                   global_step=1)
-
-
-
+            for key2, val2 in val.items():
+                path = "/storage/sjpark/vehicle_data/precision_recall_per_class_p_threshold/{}/256/recall/{}/{}_{}.txt".format(self.cfg['dataset']['network_name'],key, key, key2)
+                np.savetxt(path, total_avr_recall[key][key2], fmt='%f')
 
 
 

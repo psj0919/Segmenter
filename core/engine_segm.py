@@ -48,7 +48,7 @@ class Trainer():
             device = torch.device("cpu")
 
         return device
-    def setup_model_config(self,cfg):
+    def setup_model_config(self, cfg):
         model_cfg = self.cfg["model"]["backbone"]
         decoder_cfg = self.cfg["decoder"]
 
@@ -145,7 +145,7 @@ class Trainer():
 
 
     def training(self):
-        print("-----strat training-----")
+        print("-----strat training_{}-----".format(self.cfg['dataset']['network_name']))
         self.model.train()
         for curr_epoch in range(self.cfg['dataset']['epochs']):
             if (curr_epoch + 1) % 3 == 0:
@@ -213,19 +213,14 @@ class Trainer():
 
     def validation(self):
         self.model.eval()
-        total_ious = []
-        total_accs = {}
-        cls = []
         cls_count = []
+        total_avr_acc = {}
+        total_avr_iou = {}
+        total_avr_precision = {}
+        total_avr_recall = {}
         #
         for i in range(len(CLASSES)):
             CLASSES[i] = CLASSES[i].lower()
-        #
-        for c in CLASSES:
-            if c in except_classes:
-                pass
-            else:
-                total_accs[c] = []
         #
         for iter, (data, target, label, idx) in enumerate(self.val_loader):
             cls = []
@@ -233,6 +228,8 @@ class Trainer():
             total_accs = {}
             avr_precision = {}
             avr_recall = {}
+            p_threshold = [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15,
+                           0.1, 0.05]
             #
             self.global_step += 1
             #
@@ -263,40 +260,42 @@ class Trainer():
                         cls_count.append(1)
 
             avr_ious = [total / count for total, count in zip(total_ious, cls_count)]
+            for i in range(len(avr_ious)):
+                total_avr_iou.setdefault(cls[i], []).append(avr_ious[i])
             cls_count.clear()
 
             # Pixel Acc
-
             x = pixel_acc_cls(pred[0].cpu(), label[0].cpu(), json_path)
+
             for key, val in x.items():
                 if len(val) > 1:
                     total_accs[key] = sum(val) / len(val)
                     c = CLASSES.index(key)
-
+                    total_avr_acc.setdefault(key, []).append(sum(val) / len(val))
                 else:
                     total_accs[key] = val[0]
                     c = CLASSES.index(key)
+                    total_avr_acc.setdefault(key, []).append(val[0])
 
             #
-            precision, recall = precision_recall(target[0], pred_softmax[0], json_path, threshold=0.5)
+            precision, recall = precision_recall(target[0], pred_softmax[0], json_path, threshold=p_threshold)
             for key, val in precision.items():
-                if len(val) > 1:
-                    avr_precision[key] = sum(val) / len(val)
-                    c = CLASSES.index(key)
-
-                else:
-                    avr_precision[key] = val[0]
-                    c = CLASSES.index(key)
-
+                for key2, val2 in val.items():
+                    if key == 0.5:
+                        if len(val2) > 1:
+                            avr_precision[key2] = sum(val2) / len(val2)
+                        else:
+                            avr_precision[key2] = val2[0]
+                    total_avr_precision.setdefault(key2, {}).setdefault(key, []).append(val2[0].cpu())
             #
             for key, val in recall.items():
-                if len(val) > 1:
-                    avr_recall[key] = sum(val) / len(val)
-                    c = CLASSES.index(key)
-
-                else:
-                    avr_recall[key] = val[0]
-                    c = CLASSES.index(key)
+                for key2, val2 in val.items():
+                    if key == 0.5:
+                        if len(val2) > 1:
+                            avr_recall[key2] = sum(val2) / len(val2)
+                        else:
+                            avr_recall[key2] = val2[0]
+                    total_avr_recall.setdefault(key2, {}).setdefault(key, []).append(val2[0].cpu())
 
         self.model.train()
         return avr_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, avr_precision, avr_recall

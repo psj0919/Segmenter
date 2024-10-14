@@ -5,7 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 
 
-from Config.config import get_config_dict
+from Config.config_segm import get_config_dict
 
 except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
@@ -20,8 +20,8 @@ cfg = get_config_dict()
 if cfg['model']['mode'] == 'train':
     pass
 else:
-    from Config.config_test import get_test_config_dict
-    cfg = get_test_config_dict()
+    from Config.config_test_segm import get_config_dict
+    cfg = get_config_dict()
 
 
 #------------------------------------------- make_image-rgb--------------------------------------------------------------#
@@ -188,7 +188,7 @@ def make_bbox(json_path, target_image, pred_image):
         CLASSES[i] = CLASSES[i].lower()
     #
     org_res = (1920, 1080)
-    target_res = cfg['dataset']['size']
+    target_res = cfg['model']['backbone']['image_size']
     #
     scale_x = target_res[0] / org_res[0]
     scale_y = target_res[1] / org_res[1]
