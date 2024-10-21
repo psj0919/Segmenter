@@ -203,12 +203,12 @@ class Trainer():
 
         for key, val in total_avr_precision.items():
             for key2, val2 in val.items():
-                path = "/storage/sjpark/vehicle_data/precision_recall_per_class_p_threshold/{}/256/precision/{}/{}_{}.txt".format(self.cfg['dataset']['network_name'],key, key, key2)
+                path = "/storage/sjpark/vehicle_data/precision_recall_per_class_p_threshold/{}/512/precision/{}/{}_{}.txt".format(self.cfg['dataset']['network_name'],key, key, key2)
                 np.savetxt(path, total_avr_precision[key][key2], fmt= '%f')
 
         for key, val in total_avr_recall.items():
             for key2, val2 in val.items():
-                path = "/storage/sjpark/vehicle_data/precision_recall_per_class_p_threshold/{}/256/recall/{}/{}_{}.txt".format(self.cfg['dataset']['network_name'],key, key, key2)
+                path = "/storage/sjpark/vehicle_data/precision_recall_per_class_p_threshold/{}/512/recall/{}/{}_{}.txt".format(self.cfg['dataset']['network_name'],key, key, key2)
                 np.savetxt(path, total_avr_recall[key][key2], fmt='%f')
 
 

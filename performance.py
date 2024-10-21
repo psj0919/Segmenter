@@ -4,10 +4,10 @@ import os
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    network = ['Seg-B']  # Seg-S, Seg-B
+    network = ['Seg-S']  # Seg-S, Seg-B
     result_path = '/storage/sjpark/vehicle_data/precision_recall_per_class_p_threshold/'
 
-    image_sizes = ['256']
+    image_sizes = ['512']
 
     class_names = glob(os.path.join(result_path, network[0], image_sizes[0], 'precision', '*'))
     class_names = [class_names[i].split('/')[-1] for i in range(len(class_names))]
@@ -66,8 +66,8 @@ if __name__ == '__main__':
 
     for name in class_names:
         for prob in probs:
-            precision_curve.append(precision_dict["Seg-B"]["256"][name][prob]['ap'])
-            recall_curve.append(recall_dict["Seg-B"]["256"][name][prob]['ar'])
+            precision_curve.append(precision_dict["Seg-S"]["512"][name][prob]['ap'])
+            recall_curve.append(recall_dict["Seg-S"]["512"][name][prob]['ar'])
 
         fig = plt.figure(figsize=(9, 6))
         plt.plot(recall_curve, precision_curve)
@@ -87,17 +87,17 @@ if __name__ == '__main__':
             mAP[net_name][prob] = []
             x = 0
             for name in class_names:
-                x += precision_dict[net_name]['256'][name][prob]['ap']
+                x += precision_dict[net_name]['512'][name][prob]['ap']
             mAP[net_name][prob].append(x / len(class_names))
 
     for name in class_names:
-        print(precision_dict['Seg-B']['256'][name]['0.3']['ap'])
+        print(precision_dict['Seg-S']['512'][name]['0.4']['ap'])
 
 
     #
     val = []
     for prob in probs:
-        val.append(mAP['Seg-B'][prob][0])
+        val.append(mAP['Seg-S'][prob][0])
     #
     plt.plot(probs, val)
     plt.scatter(probs, val)

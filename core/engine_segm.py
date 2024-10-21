@@ -14,6 +14,8 @@ from timm import scheduler
 from timm import optim
 from optim.scheduler import PolynomiaLR
 from torch.utils.tensorboard import SummaryWriter
+from Segmenter.factory import load_model
+
 
 except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
 
@@ -37,6 +39,7 @@ class Trainer():
         self.scheduler = self.setup_scheduler_step()
         self.loss = self.setup_loss()
         self.save_path = self.cfg['model']['save_dir']
+        self.load_weight()
         self.writer = SummaryWriter(log_dir = self.save_path)
         self.global_step = 0
 
@@ -142,6 +145,22 @@ class Trainer():
         else:
             raise("Please check loss name...")
         return loss
+
+    def load_weight(self):
+        file_path = self.cfg['model']['pretrained_model']
+        ckpt = torch.load(file_path, map_location=self.device)
+
+        x = list(ckpt['model'].keys())
+        y = [layer for layer in x if 'decoder' in layer] # del decoder
+
+        for i in y:
+            del ckpt['model'][i]
+
+        from collections import OrderedDict
+
+        if isinstance(ckpt, OrderedDict):
+            self.model.load_state_dict(ckpt, strict=True)
+
 
 
     def training(self):

@@ -15,8 +15,7 @@ from Segmenter.utils import checkpoint_filter_fn
 from Segmenter.decoder import DecoderLinear
 from Segmenter.decoder import MaskTransformer
 from Segmenter.Segmenter import Segmenter
-
-
+from timm.models.vision_transformer import _load_weights
 
 @register_model
 def vit_base_patch8_384(pretrained=False, **kwargs):
@@ -103,16 +102,16 @@ def create_segmenter(model_cfg):
     return model
 
 
-# def load_model(model_path):
-#     variant_path = Path(model_path).parent / "variant.yml"
-#     with open(variant_path, "r") as f:
-#         variant = yaml.load(f, Loader=yaml.FullLoader)
-#     net_kwargs = variant["net_kwargs"]
-#
-#     model = create_segmenter(net_kwargs)
-#     data = torch.load(model_path, map_location=ptu.device)
-#     checkpoint = data["model"]
-#
-#     model.load_state_dict(checkpoint, strict=True)
-#
-#     return model, variant
+def load_model(model_path):
+    variant_path = Path(model_path).parent / "variant.yml"
+    with open(variant_path, "r") as f:
+        variant = yaml.load(f, Loader=yaml.FullLoader)
+    net_kwargs = variant["net_kwargs"]
+
+    model = create_segmenter(net_kwargs)
+    data = torch.load(model_path, map_location='cpu')
+    checkpoint = data["model"]
+
+    model.load_state_dict(checkpoint, strict=True)
+
+    return model, variant
