@@ -7,7 +7,7 @@ if __name__ == '__main__':
     network = ['Seg-S']  # Seg-S, Seg-B
     result_path = '/storage/sjpark/vehicle_data/precision_recall_per_class_p_threshold/'
 
-    image_sizes = ['512']
+    image_sizes = ['256']
 
     class_names = glob(os.path.join(result_path, network[0], image_sizes[0], 'precision', '*'))
     class_names = [class_names[i].split('/')[-1] for i in range(len(class_names))]
@@ -61,25 +61,28 @@ if __name__ == '__main__':
                     recall_dict[net_name][img_s][name][prob]['ar'] = np.sum(result_values) / len(result_values)
 
 
-    precision_curve = []
-    recall_curve = []
+    # AP-AR curve
+    # precision_curve = []
+    # recall_curve = []
+    #
+    # for name in class_names:
+    #     for prob in probs:
+    #         precision_curve.append(precision_dict["Seg-S"]["512"][name][prob]['ap'])
+    #         recall_curve.append(recall_dict["Seg-S"]["512"][name][prob]['ar'])
+    #
+    #     fig = plt.figure(figsize=(9, 6))
+    #     plt.plot(recall_curve, precision_curve)
+    #     plt.scatter(recall_curve, precision_curve)
+    #     plt.xlabel('Recall')
+    #     plt.ylabel('Precision')
+    #     plt.title('Precision_recall_{}_curve'.format(name))
+    #     plt.savefig('/storage/sjpark/vehicle_data/curve/{}.png'.format(name))
+    #     plt.close()
+    #     precision_curve.clear()
+    #     recall_curve.clear()
 
-    for name in class_names:
-        for prob in probs:
-            precision_curve.append(precision_dict["Seg-S"]["512"][name][prob]['ap'])
-            recall_curve.append(recall_dict["Seg-S"]["512"][name][prob]['ar'])
 
-        fig = plt.figure(figsize=(9, 6))
-        plt.plot(recall_curve, precision_curve)
-        plt.scatter(recall_curve, precision_curve)
-        plt.xlabel('Recall')
-        plt.ylabel('Precision')
-        plt.title('Precision_recall_{}_curve'.format(name))
-        plt.savefig('/storage/sjpark/vehicle_data/curve/{}.png'.format(name))
-        plt.close()
-        precision_curve.clear()
-        recall_curve.clear()
-
+    # mAP
     mAP = dict()
     for net_name in network:
         mAP[net_name] = dict()
@@ -94,7 +97,7 @@ if __name__ == '__main__':
         print(precision_dict['Seg-S']['512'][name]['0.4']['ap'])
 
 
-    #
+    # mAP per threshold_probability
     val = []
     for prob in probs:
         val.append(mAP['Seg-S'][prob][0])
@@ -105,3 +108,16 @@ if __name__ == '__main__':
     plt.ylabel('mAP')
     plt.title('mAP per threshold_probability')
     plt.imshow()
+
+    #F1-score
+    precision_f1 = []
+    recall_f1 = []
+    f1_score = {}
+
+    for name in class_names:
+        for prob in probs:
+            x = 2 * precision_dict["FCN"]["512"][name][prob]['ap'] * recall_dict["FCN"]["512"][name][prob]['ar'] / precision_dict["FCN"]["512"][name][prob]['ap'] * recall_dict["FCN"]["512"][name][prob]['ar']
+            f1_score.setdefault(prob, x)
+
+
+

@@ -45,7 +45,7 @@ def Segmenter_param(model):
 
 def get_config_dict():
     dataset_name = "vehicledata"
-    network_name = 'Seg-S'
+    network_name = 'Seg-BP8'
     name, img_path, ann_path, val_path, val_ann_path, test_path, test_ann_path, json_file, num_class, = dataset_info(dataset_name)
     patch_size, d_model, n_heads, n_layers = Segmenter_param(network_name)
     dataset = dict(
@@ -59,7 +59,7 @@ def get_config_dict():
         test_ann_path = test_ann_path,
         json_file = json_file,
         num_class = num_class,
-        epochs = 200,
+        epochs = 150,
         eval_freq =4,
         batch_size = 2,
         image_size= 256,
@@ -69,14 +69,15 @@ def get_config_dict():
         num_workers = 3
     )
     solver = dict(
-        optimizer = "adam",
+        optimizer = "sgd",
         scheduler='cyclelr',
         step_size=5,
         gamma=0.95,
         loss="crossentropy",
         weight_decay=5e-4,
+        gap_cyclic = 1e-0,
         print_freq=20,
-        lr=1e-4,
+        lr=3e-3,
 
     )
     model = dict(
@@ -91,12 +92,13 @@ def get_config_dict():
             normalization= "vit",
             n_cls= num_class,
             distilled= False,
+            pretrain= 'y'
         ),
-        pretrained_model = '/storage/sjpark/vehicle_data/pretrained_segmenter/Seg-S_checkpoint.pth',
+        pretrained_model = '/storage/sjpark/vehicle_data/pretrained_segmenter/Seg-BP8_checkpoint.pth',
         resume = ' ',
         mode = 'train',
-        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train/256',
-        checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/256'
+        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train/256/Seg-BP8',
+        checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/256/Seg-BP8'
     )
 
     decoder = dict(

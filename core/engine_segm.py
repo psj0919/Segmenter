@@ -25,6 +25,7 @@ CLASSES = [
     'yellowLane', 'blueLane', 'constructionGuide', 'trafficDrum',
     'rubberCone', 'trafficSign', 'warningTriangle', 'fence'
 ]
+p_threshold = [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05]
 
 class Trainer():
     def __init__(self, cfg):
@@ -119,7 +120,7 @@ class Trainer():
             scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, self.cfg['solver']['step_size'],
                                                         self.cfg['solver']['gamma'])
         elif self.cfg['solver']['scheduler'] == 'cyclelr':
-            scheduler = torch.optim.lr_scheduler.CyclicLR(self.optimizer, base_lr=1e-7,
+            scheduler = torch.optim.lr_scheduler.CyclicLR(self.optimizer, base_lr=self.cfg['solver']['lr'] * self.cfg['solver']['gap_cyclic'],
                                                           max_lr=self.cfg['solver']['lr'],
                                                           step_size_up=int(self.cfg['dataset']['epochs'] / 5 * 0.7),
                                                           step_size_down=int(self.cfg['dataset']['epochs'] / 5) - int(self.cfg['dataset']['epochs'] / 5 * 0.7),
@@ -147,31 +148,48 @@ class Trainer():
         return loss
 
     def load_weight(self):
-        file_path = self.cfg['model']['pretrained_model']
-        ckpt = torch.load(file_path, map_location=self.device)
 
-        x = list(ckpt['model'].keys())
-        y = [layer for layer in x if 'decoder' in layer] # del decoder
+        if self.cfg['model']['backbone']['pretrain'] == 'y':
+            file_path = self.cfg['model']['pretrained_model']
+            print("Loading pretrained weights {}".format(file_path))
+            ckpt = torch.load(file_path, map_location=self.device)
 
-        for i in y:
-            del ckpt['model'][i]
+            x = list(ckpt['model'].keys())
+            y = [layer for layer in x if 'decoder' in layer] # del decoder
 
-        from collections import OrderedDict
+            for i in y:
+                del ckpt['model'][i]
 
-        if isinstance(ckpt, OrderedDict):
-            self.model.load_state_dict(ckpt, strict=True)
+            from collections import OrderedDict
+
+            if isinstance(ckpt, OrderedDict):
+                self.model.load_state_dict(ckpt, strict=True)
+
+        elif self.cfg['model']['backbone']['pretrain'] == 'n':
+            file_path = self.cfg['model']['resume']
+            assert os.path.exists(file_path), f'There is no checkpoints file!'
+            print("Loading saved weighted {}".format(file_path))
+            ckpt = torch.load(file_path, map_location=self.device)
+            resume_state_dict = ckpt['model'].state_dict()
+
+            self.model.load_state_dict(resume_state_dict, strict=True)  # load weights
+
 
 
 
     def training(self):
         print("-----strat training_{}-----".format(self.cfg['dataset']['network_name']))
         self.model.train()
-        for curr_epoch in range(self.cfg['dataset']['epochs']):
+        tmp = 0  # for prob mAP
+        tmp2 = 0  # for avr_mAP
+        for curr_epoch in range(self.cfg['args']['epochs']):
+            #
             if (curr_epoch + 1) % 3 == 0:
-                avr_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, avr_precision, avr_recall = self.validation()
+                total_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, avr_precision, avr_recall, mAP = self.validation()
 
-                for i in range(len(avr_ious)):
-                    self.writer.add_scalar(tag='total_ious/{}'.format(cls[i]), scalar_value=avr_ious[i], global_step = self.global_step)
+                for key, val in total_ious.items():
+                    self.writer.add_scalar(tag='total_ious/{}'.format(key), scalar_value=val,
+                                           global_step=self.global_step)
 
                 # Crop Image
                 for i in range(len(target_crop_image)):
@@ -180,14 +198,33 @@ class Trainer():
                     self.writer.add_image('pred /' + org_cls[i], pred_to_class_rgb(pred_crop_image[i], org_cls[i]),
                                           dataformats='HWC', global_step=self.global_step)
                 # Pixel Acc
-                for i in range(len(cls)):
-                    self.writer.add_scalar(tag='pixel_accs/{}'.format(cls[i]), scalar_value=total_accs[cls[i]], global_step=self.global_step)
+                for key, val in total_accs.items():
+                    self.writer.add_scalar(tag='pixel_accs/{}'.format(key), scalar_value=val,
+                                           global_step=self.global_step)
 
                 # precision & recall
-                for i in range(len(cls)):
-                    self.writer.add_scalar(tag='precision/{}'.format(cls[i]), scalar_value=avr_precision[cls[i]], global_step=self.global_step)
-                for i in range(len(cls)):
-                    self.writer.add_scalar(tag='recall/{}'.format(cls[i]), scalar_value=avr_recall[cls[i]], global_step=self.global_step)
+                for key, val in avr_precision.items():
+                    self.writer.add_scalar(tag='precision/{}'.format(key), scalar_value=val,
+                                           global_step=self.global_step)
+                for key, val in avr_recall.items():
+                    self.writer.add_scalar(tag='recall/{}'.format(key), scalar_value=val,
+                                           global_step=self.global_step)
+                # mAP
+                z = []
+                for i in range(len(p_threshold)):
+                    self.writer.add_scalar(tag='mAP/{}'.format(str(p_threshold[i])), scalar_value=mAP[str(p_threshold[i])],
+                                           global_step=self.global_step)
+                    z.append(mAP[str(p_threshold[i])])
+                max_z = max(z)
+
+                # for save 1 -> max_prob_mAP
+                if max_z > tmp :
+                    tmp = max_z
+                    self.save_model(self.cfg['model']['checkpoint'])
+                # for save 2 -> avr_mAP
+                if (sum(z) / len(z)) > tmp2:
+                    tmp2 = sum(z) / len(z)
+                    self.save_model2(self.cfg['model']['checkpoint'])
 
             #
             for batch_idx, (data, target, label, index) in (enumerate(self.train_loader)):
@@ -231,6 +268,7 @@ class Trainer():
                 self.save_model(self.cfg['model']['checkpoint'])
 
     def validation(self):
+        # mAP -> weight ㅈㅈㅏㅇ
         self.model.eval()
         cls_count = []
         total_avr_acc = {}
@@ -322,7 +360,7 @@ class Trainer():
 
 
     def save_model(self, save_path):
-        save_file = 'Segmenter_{}_epochs:{}_optimizer:{}_lr:{}_model{}.pth'.format(self.cfg['dataset']['network_name'],
+        save_file = 'Segmenter_pretrained_{}_epochs:{}_optimizer:{}_lr:{}_model{}_max_prob_mAP.pth'.format(self.cfg['dataset']['network_name'],
                                                                           self.cfg['dataset']['epochs'],
                                                                           self.cfg['solver']['optimizer'],
                                                                           self.cfg['solver']['lr'],
@@ -332,7 +370,14 @@ class Trainer():
         print("Success save")
 
 
-
+    def save_model2(self, save_path):
+        save_file = 'Segmenter_pretrained:{}_optimizer:{}_lr:{}_model{}_total_mAP.pth'.format(self.cfg['args']['epochs'],
+                                                                          self.cfg['solver']['optimizer'],
+                                                                          self.cfg['solver']['lr'],
+                                                                          self.cfg['args']['network_name'])
+        path = os.path.join(save_path, save_file)
+        torch.save({'model': deepcopy(self.model), 'optimizer': self.optimizer.state_dict()}, path)
+        print("Success save_avr_mAP")
 
 
 

@@ -10,5 +10,4 @@ if __name__=='__main__':
     cfg = get_config_dict()
     trainer = Trainer(cfg)
     trainer.training()
-    # trainer.validation()
 
