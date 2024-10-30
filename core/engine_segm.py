@@ -14,7 +14,7 @@ from timm import scheduler
 from timm import optim
 from optim.scheduler import PolynomiaLR
 from torch.utils.tensorboard import SummaryWriter
-from Segmenter.factory import load_model
+
 
 
 except_classes = ['motorcycle', 'bicycle', 'twowheeler', 'pedestrian', 'rider', 'sidewalk', 'crosswalk', 'speedbump', 'redlane', 'stoplane', 'trafficlight']
@@ -182,7 +182,7 @@ class Trainer():
         self.model.train()
         tmp = 0  # for prob mAP
         tmp2 = 0  # for avr_mAP
-        for curr_epoch in range(self.cfg['args']['epochs']):
+        for curr_epoch in range(self.cfg['dataset']['epochs']):
             #
             if (curr_epoch + 1) % 3 == 0:
                 total_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, avr_precision, avr_recall, mAP = self.validation()
@@ -264,27 +264,21 @@ class Trainer():
             self.writer.add_scalar(tag='train/lr', scalar_value=self.optimizer.param_groups[0]['lr'],
                                    global_step=curr_epoch)
 
-            if self.global_step % 2 == 0:
-                self.save_model(self.cfg['model']['checkpoint'])
 
     def validation(self):
-        # mAP -> weight ㅈㅈㅏㅇ
         self.model.eval()
         cls_count = []
-        total_avr_acc = {}
-        total_avr_iou = {}
-        total_avr_precision = {}
-        total_avr_recall = {}
+        total_accs = {}
+        total_ious = {}
+        avr_precision = {}
+        avr_recall = {}
+        mAP = {}
         #
         for i in range(len(CLASSES)):
             CLASSES[i] = CLASSES[i].lower()
         #
         for iter, (data, target, label, idx) in enumerate(self.val_loader):
             cls = []
-            total_ious = []
-            total_accs = {}
-            avr_precision = {}
-            avr_recall = {}
             p_threshold = [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15,
                            0.1, 0.05]
             #
@@ -307,55 +301,92 @@ class Trainer():
 
             for i in range(len(iou)):
                 for key, val in iou[i].items():
-                    if key in cls:
-                        a = cls.index(key)
-                        total_ious[a] += val
-                        cls_count[a] += 1
+                    if key in except_classes:
+                        pass
                     else:
-                        cls.append(key)
-                        total_ious.append(val)
-                        cls_count.append(1)
-
-            avr_ious = [total / count for total, count in zip(total_ious, cls_count)]
-            for i in range(len(avr_ious)):
-                total_avr_iou.setdefault(cls[i], []).append(avr_ious[i])
-            cls_count.clear()
+                        total_ious.setdefault(key, []).append(val)
 
             # Pixel Acc
             x = pixel_acc_cls(pred[0].cpu(), label[0].cpu(), json_path)
-
             for key, val in x.items():
-                if len(val) > 1:
-                    total_accs[key] = sum(val) / len(val)
-                    c = CLASSES.index(key)
-                    total_avr_acc.setdefault(key, []).append(sum(val) / len(val))
+                if key in except_classes:
+                    pass
                 else:
-                    total_accs[key] = val[0]
-                    c = CLASSES.index(key)
-                    total_avr_acc.setdefault(key, []).append(val[0])
+                    if len(val) > 1:
+                        total_accs.setdefault(key, []).append(sum(val) / len(val))
+
+                    else:
+                        total_accs.setdefault(key, []).append(val[0])
 
             #
             precision, recall = precision_recall(target[0], pred_softmax[0], json_path, threshold=p_threshold)
             for key, val in precision.items():
                 for key2, val2 in val.items():
                     if key == 0.5:
-                        if len(val2) > 1:
-                            avr_precision[key2] = sum(val2) / len(val2)
+                        if key2 in except_classes:
+                            pass
                         else:
-                            avr_precision[key2] = val2[0]
-                    total_avr_precision.setdefault(key2, {}).setdefault(key, []).append(val2[0].cpu())
+                            if len(val2) > 1:
+                                avr_precision.setdefault(key2, []).append(sum(val2) / len(val2))
+                            else:
+                                avr_precision.setdefault(key2, []).append(val2[0])
             #
             for key, val in recall.items():
                 for key2, val2 in val.items():
                     if key == 0.5:
-                        if len(val2) > 1:
-                            avr_recall[key2] = sum(val2) / len(val2)
+                        if key2 in except_classes:
+                            pass
                         else:
-                            avr_recall[key2] = val2[0]
-                    total_avr_recall.setdefault(key2, {}).setdefault(key, []).append(val2[0].cpu())
+                            if len(val2) > 1:
+                                avr_recall.setdefault(key2, []).append(sum(val2) / len(val2))
+                            else:
+                                avr_recall.setdefault(key2, []).append(val2[0])
+
+
+            # mAP
+            for key, val in precision.items():
+                x = 0
+                for key2, val2 in val.items():
+                    if len(val2) > 1:
+                        x =  x + sum(val2) / len(val2)
+                    else:
+                        x = x + val2[0]
+                mAP.setdefault(str(key), []).append(x / len(key2))
+
+
+        #
+        for k, v in total_ious.items():
+            if len(v) > 1:
+                total_ious[k] = sum(v) / len(v)
+            else:
+                total_ious[k] = v
+        #
+        for k, v in total_accs.items():
+            if len(v) > 1:
+                total_accs[k] = sum(v) / len(v)
+            else:
+                total_ious[k] = v
+        #
+        for k, v in avr_precision.items():
+            if len(v) > 1:
+                avr_precision[k] = sum(v) / len(v)
+            else:
+                avr_precision[k] = v
+        #
+        for k, v in avr_recall.items():
+            if len(v) > 1:
+                avr_recall[k] = sum(v) / len(v)
+            else:
+                avr_recall[k] = v
+        #
+        for k, v in mAP.items():
+            if len(v) > 1:
+                mAP[k] = sum(v) / len(v)
+            else:
+                mAP[k] = v
 
         self.model.train()
-        return avr_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, avr_precision, avr_recall
+        return total_ious, total_accs, cls, org_cls, target_crop_image, pred_crop_image, avr_precision, avr_recall, mAP
 
 
 
@@ -371,10 +402,10 @@ class Trainer():
 
 
     def save_model2(self, save_path):
-        save_file = 'Segmenter_pretrained:{}_optimizer:{}_lr:{}_model{}_total_mAP.pth'.format(self.cfg['args']['epochs'],
+        save_file = 'Segmenter_pretrained:{}_optimizer:{}_lr:{}_model{}_total_mAP.pth'.format(self.cfg['dataset']['epochs'],
                                                                           self.cfg['solver']['optimizer'],
                                                                           self.cfg['solver']['lr'],
-                                                                          self.cfg['args']['network_name'])
+                                                                          self.cfg['dataset']['network_name'])
         path = os.path.join(save_path, save_file)
         torch.save({'model': deepcopy(self.model), 'optimizer': self.optimizer.state_dict()}, path)
         print("Success save_avr_mAP")

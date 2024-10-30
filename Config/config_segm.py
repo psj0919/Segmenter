@@ -45,7 +45,7 @@ def Segmenter_param(model):
 
 def get_config_dict():
     dataset_name = "vehicledata"
-    network_name = 'Seg-BP8'
+    network_name = 'Seg-B'
     name, img_path, ann_path, val_path, val_ann_path, test_path, test_ann_path, json_file, num_class, = dataset_info(dataset_name)
     patch_size, d_model, n_heads, n_layers = Segmenter_param(network_name)
     dataset = dict(
@@ -94,11 +94,11 @@ def get_config_dict():
             distilled= False,
             pretrain= 'y'
         ),
-        pretrained_model = '/storage/sjpark/vehicle_data/pretrained_segmenter/Seg-BP8_checkpoint.pth',
+        pretrained_model = '/storage/sjpark/vehicle_data/pretrained_segmenter/Seg-B_checkpoint.pth',
         resume = ' ',
         mode = 'train',
-        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train/256/Seg-BP8',
-        checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/256/Seg-BP8'
+        save_dir = '/storage/sjpark/vehicle_data/runs/Segmenter/train/256/Seg-B',
+        checkpoint = '/storage/sjpark/vehicle_data/checkpoints/segm/256/Seg-B'
     )
 
     decoder = dict(
